@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CF algorithm database</title>
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#ffffff; --ink:#1c1d21; --muted:#6a6d76; --line:#dcdad3;
+  --accent:#b3401f; --accent-ink:#ffffff; --row:#f1efe9; --sticker:#8a8c91; --centre:#6f7176;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#17181b; --panel:#202226; --ink:#eceae4; --muted:#9a9da6; --line:#34363c;
+    --accent:#f08a5d; --accent-ink:#17181b; --row:#26282d; --sticker:#74767c; --centre:#55575d; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:18px 20px 6px;max-width:1180px;margin:0 auto}
+h1{font-size:20px;margin:0;letter-spacing:.01em}
+header p{margin:2px 0 0;color:var(--muted);font-size:13px}
+main{max-width:1180px;margin:0 auto;padding:10px 20px 40px;display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){main{grid-template-columns:minmax(0,1fr);padding:10px 16px 32px}header{padding:16px 16px 4px}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.side{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.subsets{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.subsets button{padding:7px 0;font-weight:600}
+.subsets button[aria-pressed=true], .chips button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.subsets button.missing{opacity:.4}
+.subname{margin:8px 0 0;font-size:13px;color:var(--muted)}
+svg{display:block;width:100%;height:auto}
+.net polygon{stroke:var(--panel);stroke-width:1.5;stroke-linejoin:round}
+.net .pick{cursor:pointer}
+.net .pick:hover{filter:brightness(1.15)}
+.net text{font:600 15px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none;fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.55);stroke-width:3px}
+.net .num{font-size:12px;font-weight:500}
+.net .hot{fill:var(--accent)}
+.brackets{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;align-items:center;margin-top:10px;font:600 20px var(--mono)}
+.brackets .grp{display:inline-flex;gap:3px;align-items:center;color:var(--muted)}
+.brackets button{width:30px;height:34px;padding:0;font:600 18px var(--mono);background:var(--row);color:var(--ink)}
+.casemeta{text-align:center;color:var(--muted);font-size:12px;margin-top:6px}
+.hint{color:var(--muted);font-size:12px;margin:8px 0 0}
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.bar .title{font:600 19px var(--mono)}
+.bar .title small{font:400 13px system-ui,sans-serif;color:var(--muted);margin-left:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chips span{font-size:12px;color:var(--muted);margin-right:2px}
+.chips button{padding:4px 10px;font-size:13px}
+.count{color:var(--muted);font-size:13px;margin:0 0 8px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--panel);text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:5px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--row)}
+td.alg{font-family:var(--mono);font-size:14px;cursor:copy}
+td.num, th.num{text-align:right}
+td.ang{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.msg{padding:26px 10px;text-align:center;color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:7px 14px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>CF algorithm database</h1>
+  <p>Skewb, centers first. Every solution of up to 11 moves in r R b B, in all 6 versions, rated.</p>
+</header>
+<main>
+  <div class="side">
+    <section class="panel">
+      <h2>Subset</h2>
+      <div class="subsets" id="subsets"></div>
+      <p class="subname" id="subname"></p>
+    </section>
+    <section class="panel">
+      <h2>Case</h2>
+      <svg class="net" id="casenet" viewBox="10 37 520 460" role="img" aria-label="Recognition picture of the subset with the six orientation corners"></svg>
+      <div class="brackets" id="brackets" aria-label="Orientation of corners 1 to 6"></div>
+      <div class="casemeta" id="casemeta"></div>
+      <p class="hint">Click a numbered corner or a digit to cycle 0 → + → −. Same-coloured corners swap; the darker tile shows where a 3-swap travels.</p>
+    </section>
+    <section class="panel">
+      <h2>Angle numbers</h2>
+      <svg class="net" id="anglenet" viewBox="10 37 520 460" role="img" aria-label="Sticker locations 1 to 24"></svg>
+      <p class="hint">Bring the sticker location with the algorithm's number to location 3, then do the algorithm. Hover a row to see its number here.</p>
+    </section>
+  </div>
+  <section class="panel">
+    <div class="bar">
+      <div class="title" id="title"></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <p class="count" id="count"></p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="num">#</th><th class="num">Rater score</th><th class="num">Moves</th><th>Angle</th><th>Algorithm</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="msg" id="msg" hidden></div>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+<script>
+var CF_MANIFEST = {subsets: []};
+</script>
+<script src="data/manifest.js"></script>
+<script>
+"use strict";
+const SUBSETS = {A:"3C + 22",B:"3A + 22",C:"3C + 3A adjacent",D:"3C + 3C adjacent",E:"3A + 3A adjacent",
+  F:"3C + solved",G:"3A + solved",H:"3C + 3A opposite",I:"22 + solved",J:"3C + 3C opposite",K:"3A + 3A opposite",
+  L:"22 + 22 cross",M:"22 + 22 left",N:"22 + 22 right",O:"solved + solved"};
+// sticker colours of the recognition pictures, sticker locations 1..24
+const PICS = {A:"LbLRbLDGLDGbbLxGLbGxGbGx",B:"LDLRDLbGLbGDbLxGLbGxGbGx",C:"GbLRbLDxGDLbbLxGLbxxxbLx",
+  D:"LbGRbLDxLDGbbGxLLbxxxbLx",E:"GDLRDLbxGbLDbLxGLbxxxbLx",F:"xbxRbxDxxDxbbxxxxbxxxbxx",
+  G:"xDxRDxbxxbxDbxxxxbxxxbxx",H:"LbxRbxDLxDLbbGxLLbGxLbGx",I:"LxLRxLxGLxGxxLxGLxGxGxGx",
+  J:"LbxRbxDLxDLbbLxGGbLxGbLx",K:"LDxRDxbLxbLDbGxLLbGxLbGx",L:"LbLRbLMGLbGMbLMGLbGMGMGM",
+  M:"LMLRbLbGLMGbMLMGLbGMGbGM",N:"LbLRMLbGLbGbbLMGLMGMGbGM",O:"xxxRxxxxxxxxxxxxxxxxxxxx"};
+const COLOUR = {L:"#b5e61d",G:"#22b14c",b:"#99d9ea",D:"#3f48cc",M:"#00a2e8",R:"#ed1c24"};
+const FACES = {
+  U:[["UL",145,110],["UB",270,47],["UR",395,110],["UF",270,172]],
+  FL:[["UL",145,110],["UF",270,172],["DF",270,330],["DL",145,268]],
+  FR:[["UF",270,172],["UR",395,110],["DR",395,268],["DF",270,330]],
+  BR:[["UR",395,110],["UB",520,47],["DB",520,205],["DR",395,268]],
+  BL:[["UB",20,47],["UL",145,110],["DL",145,268],["DB",20,205]],
+  D:[["DL",145,268],["DF",270,330],["DR",270,487],["DB",145,425]]};
+const STICKER = {1:"UB U",2:"UR U",3:"UF U",4:"UL U",5:"UL FL",6:"UF FL",7:"DF FL",8:"DL FL",9:"UF FR",10:"UR FR",
+  11:"DR FR",12:"DF FR",13:"UR BR",14:"UB BR",15:"DB BR",16:"DR BR",17:"UB BL",18:"UL BL",19:"DL BL",20:"DB BL",
+  21:"DL D",22:"DF D",23:"DR D",24:"DB D"};
+const NUM = {}; for (const n in STICKER) NUM[STICKER[n]] = +n;
+const POS_STICKER = [4,1,3,2,12,11];   // orientation positions 1..6 = UL UB UF UR DF DR
+const DIGIT = ["0","+","−"];
+const svgNS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+
+let state = {letter:"A", ori:[0,0,0,0,0,0], max:11};
+const cache = {};
+const waiting = {};
+
+function el(name, attrs, text){
+  const e = document.createElementNS(svgNS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function drawNet(svg, fill, label, onPick){
+  svg.textContent = "";
+  for (const f in FACES){
+    const v = FACES[f], mid = [];
+    for (let i=0;i<4;i++){ const a=v[i], b=v[(i+1)%4]; mid.push([(a[1]+b[1])/2,(a[2]+b[2])/2]); }
+    svg.append(el("polygon",{points:mid.map(p=>p.join(",")).join(" "), fill:"var(--centre)"}));
+    for (let i=0;i<4;i++){
+      const a=v[i], m1=mid[i], m0=mid[(i+3)%4], n=NUM[a[0]+" "+f];
+      const p = el("polygon",{points:[a[1]+","+a[2], m1.join(","), m0.join(",")].join(" "), fill:fill(n), "data-n":n});
+      svg.append(p);
+      const t = label(n);
+      if (t !== null){
+        svg.append(el("text",{x:(a[1]+m1[0]+m0[0])/3, y:(a[2]+m1[1]+m0[1])/3, class: onPick ? "" : "num"}, t));
+        if (onPick){ p.classList.add("pick"); p.addEventListener("click", () => onPick(n)); }
+      }
+    }
+  }
+}
+function caseName(o){ return "("+DIGIT[o[0]]+DIGIT[o[1]]+") ("+DIGIT[o[2]]+DIGIT[o[3]]+") ("+DIGIT[o[4]]+DIGIT[o[5]]+")"; }
+function caseIndex(o){ return o.reduce((a,d)=>a*3+d,0); }
+function cycle(i){ state.ori[i] = (state.ori[i]+1)%3; update(); }
+
+function renderControls(){
+  const sub = $("subsets"); sub.textContent = "";
+  for (const l in SUBSETS){
+    const b = document.createElement("button");
+    b.textContent = l; b.title = SUBSETS[l];
+    b.setAttribute("aria-pressed", l === state.letter);
+    if (!CF_MANIFEST.subsets.includes(l)) b.classList.add("missing");
+    b.onclick = () => { state.letter = l; update(); };
+    sub.append(b);
+  }
+  $("subname").textContent = state.letter + " · " + SUBSETS[state.letter];
+  const code = PICS[state.letter];
+  drawNet($("casenet"),
+    n => COLOUR[code[n-1]] || "var(--sticker)",
+    n => { const i = POS_STICKER.indexOf(n); return i < 0 ? null : DIGIT[state.ori[i]]; },
+    n => cycle(POS_STICKER.indexOf(n)));
+  const br = $("brackets"); br.textContent = "";
+  for (let g=0;g<3;g++){
+    const grp = document.createElement("span"); grp.className = "grp"; br.append(grp);
+    grp.append("(");
+    for (let k=0;k<2;k++){
+      const i = g*2+k, b = document.createElement("button");
+      b.textContent = DIGIT[state.ori[i]];
+      b.setAttribute("aria-label", "corner "+(i+1)+": "+DIGIT[state.ori[i]]);
+      b.onclick = () => cycle(i);
+      grp.append(b);
+    }
+    grp.append(")");
+  }
+  $("casemeta").textContent = "column " + (caseIndex(state.ori)+1) + " of 729";
+  $("title").innerHTML = "";
+  $("title").append(state.letter + " " + caseName(state.ori));
+}
+function drawAngles(hot){
+  drawNet($("anglenet"), n => hot && hot.includes(n) ? "var(--accent)" : "var(--sticker)", n => String(n), null);
+}
+function parse(text){
+  return text ? text.split("\n").map(line => { const p = line.split("\t"); return {score:p[0], moves:+p[1], angle:p[2], alg:p[3]}; }) : [];
+}
+window.CF_DATA = function(letter, n, text){
+  const key = letter + n; cache[key] = parse(text);
+  if (waiting[key]) { waiting[key](); delete waiting[key]; }
+};
+function load(letter, n, done){
+  const key = letter + n;
+  if (cache[key]) return done();
+  waiting[key] = done;
+  const s = document.createElement("script");
+  s.src = "data/" + letter + "/" + n + ".js";
+  s.onerror = () => { delete waiting[key]; showMsg("Could not load the data file for this case."); };
+  document.head.append(s);
+}
+function showMsg(t){ $("rows").textContent = ""; $("msg").hidden = false; $("msg").textContent = t; $("count").textContent = ""; $("chips").textContent = ""; }
+function renderTable(){
+  const list = cache[state.letter + caseIndex(state.ori)];
+  if (!list) return;
+  const lens = [...new Set(list.map(e => e.moves))].sort((a,b)=>a-b);
+  const chips = $("chips"); chips.textContent = "";
+  const lab = document.createElement("span"); lab.textContent = "Max moves"; chips.append(lab);
+  for (let m = 11; m >= Math.min(lens[0] || 11, 11); m--){
+    const b = document.createElement("button");
+    b.textContent = m === 11 ? "All" : "≤ " + m;
+    b.setAttribute("aria-pressed", m === state.max);
+    b.onclick = () => { state.max = m; update(); };
+    chips.append(b);
+  }
+  const shown = list.filter(e => e.moves <= state.max);
+  $("count").textContent = shown.length.toLocaleString("en") + " of " + list.length.toLocaleString("en") +
+    " algorithms" + (state.max < 11 ? " (" + state.max + " moves or fewer)" : "") + ", best rated first";
+  const body = $("rows"); body.textContent = "";
+  $("msg").hidden = shown.length > 0;
+  if (!shown.length) $("msg").textContent = "No algorithm of " + state.max + " moves or fewer for this case.";
+  const frag = document.createDocumentFragment();
+  shown.forEach((e, i) => {
+    const tr = document.createElement("tr");
+    const cells = [[i+1,"num"],[e.score,"num"],[e.moves,"num"],[e.angle,"ang"],[e.alg,"alg"]];
+    for (const [t,c] of cells){ const td = document.createElement("td"); td.textContent = t; td.className = c; tr.append(td); }
+    tr.lastChild.title = "Click to copy";
+    tr.lastChild.onclick = () => copy(e.angle + " " + e.alg);
+    tr.onmouseenter = () => drawAngles(e.angle.split("/").map(Number));
+    frag.append(tr);
+  });
+  body.append(frag);
+  body.onmouseleave = () => drawAngles(null);
+}
+function copy(text){
+  const ok = () => { const t = $("toast"); t.textContent = "Copied: " + text; t.classList.add("on"); setTimeout(()=>t.classList.remove("on"), 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, () => {});
+}
+function update(){
+  const h = "#" + state.letter + state.ori.join("") + (state.max < 11 ? "m" + state.max : "");
+  if (location.hash !== h) history.replaceState(null, "", h);
+  renderControls();
+  if (!CF_MANIFEST.subsets.includes(state.letter)) return showMsg("Subset " + state.letter + " has not been generated yet.");
+  const letter = state.letter, n = caseIndex(state.ori);
+  if (!cache[letter + n]) { $("rows").textContent = ""; $("msg").hidden = false; $("msg").textContent = "Loading…"; }
+  load(letter, n, () => { if (letter === state.letter && n === caseIndex(state.ori)) renderTable(); });
+}
+function fromHash(){
+  const m = /^#([A-O])([012]{6})(?:m(\d+))?$/.exec(location.hash);
+  if (m) state = {letter:m[1], ori:[...m[2]].map(Number), max: m[3] ? Math.min(11, +m[3]) : 11};
+}
+window.addEventListener("hashchange", () => { fromHash(); update(); });
+fromHash();
+if (!location.hash && CF_MANIFEST.subsets.length && !CF_MANIFEST.subsets.includes(state.letter)) state.letter = CF_MANIFEST.subsets[0];
+drawAngles(null);
+update();
+</script>
+</body>
+</html>
