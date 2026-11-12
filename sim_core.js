@@ -199,7 +199,7 @@ var CFS = (function(){
     if (v.done){
       // no algorithm needed: just the layer, from the sheet's own angle
       h = D.angle.indexOf(v.layer ? +v.layer.split(" ")[0] : 3);
-      best = {h: h, word: v.pre[h].concat(v.suf[h]), rank: 0, entry: null, cut: 0};
+      best = {h: h, word: v.pre[h].concat(v.suf[h]), rank: 0, entry: null, cut: 0, tail: v.suf[h]};
     } else {
       var n = Math.min(limit, column.length);
       for (h = 0; h < 24; h++){
@@ -218,14 +218,14 @@ var CFS = (function(){
           }
           var w = merge(merge(v.pre[h], alg), tail);
           if (!best || w.length < best.word.length || (w.length === best.word.length && i < best.rank - 1))
-            best = {h: h, word: w, rank: i + 1, entry: e, cut: v.pre[h].length + alg.length + tail.length - w.length};
+            best = {h: h, word: w, rank: i + 1, entry: e, cut: v.pre[h].length + alg.length + tail.length - w.length, tail: tail};
         }
       }
     }
     if (!best) return null;
     if (!SOLVED_ANY.has(key(applyWord(v.start[best.h], best.word)))) throw new Error("solution does not solve the cube");
     return {angle: v.ang[best.h], text: best.word.join(" "), moves: best.word.length, layer: v.layer, split: v.split,
-            before: v.pre[best.h].join(" "), after: v.suf[best.h].join(" "), letter: v.letter, n: v.n,
+            before: v.pre[best.h].join(" "), after: v.suf[best.h].join(" "), tail: best.tail.join(" "), letter: v.letter, n: v.n,
             rank: best.rank, entry: best.entry, cancelled: best.cut};
   }
   // best solution of an option for its k-th variant, over all its choices

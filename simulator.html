@@ -40,12 +40,10 @@ button[aria-pressed=true],button.primary{background:var(--accent);border-color:v
 .chips button{font-size:13px;padding:4px 10px}
 .sol h3{margin:0 0 8px;font-size:15px}
 .sol h3 small{font-weight:400;color:var(--muted);margin-left:8px;font-size:13px}
-.sol .main{font:600 clamp(17px,2.4vw,22px)/1.35 var(--mono);background:var(--row);border-radius:8px;padding:10px 12px;cursor:copy;word-spacing:.15em;overflow-wrap:anywhere}
-.sol .main b{color:var(--accent);margin-right:.5em}
-.sol dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:10px 0 0;font-size:14px}
-.sol dt{color:var(--muted)}
-.sol dd{margin:0;overflow-wrap:anywhere}
-.sol code{font:14px var(--mono)}
+.part{font:600 clamp(16px,2.2vw,20px)/1.5 var(--mono);word-spacing:.15em;overflow-wrap:anywhere}
+.part b{color:var(--accent);margin-right:.5em}
+.part .note{font:400 13px system-ui,sans-serif;color:var(--muted);word-spacing:normal}
+.part.final{margin-top:4px}
 .msg{color:var(--muted);padding:6px 0}
 .var + .var{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .kind{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:4px}
@@ -75,10 +73,10 @@ button[aria-pressed=true],button.primary{background:var(--accent);border-color:v
   <div id="solutions" style="display:grid;gap:14px;grid-template-columns:minmax(0,1fr)"></div>
 </main>
 <div id="toast" role="status"></div>
-<script src="trainer_data.js?v=4"></script>
-<script src="trainer_core.js?v=4"></script>
-<script src="sim_data.js?v=4"></script>
-<script src="sim_core.js?v=4"></script>
+<script src="trainer_data.js?v=5"></script>
+<script src="trainer_core.js?v=5"></script>
+<script src="sim_data.js?v=5"></script>
+<script src="sim_core.js?v=5"></script>
 <script>
 "use strict";
 const DIGIT = ["0","+","−"];
@@ -148,6 +146,55 @@ function kind(v){
   const m = k => k + (k === 1 ? " move" : " moves");
   return m(v.split) + ", alg, " + m(v.size - v.split);
 }
+// how many moves at the end of `left` and at the start of `right` merge or cancel
+function meeting(left, right){
+  let n = 0;
+  while (n < left.length && n < right.length){
+    const x = left[left.length - 1 - n], y = right[n];
+    if (x[0] !== y[0]) break;
+    n++;
+    if ((x.length + y.length) % 3 !== 0) break;     // merged into one move: nothing further can cancel
+  }
+  return n;
+}
+// the solution in execution order: layer part(s) and algorithm, each on its own line with
+// what it is; moves that merge or cancel where two parts meet are bracketed, and the
+// merged string is given as "final"
+function renderParts(blk, sol, layerLabel){
+  const toks = t => t ? t.split(" ") : [];
+  const parts = [];
+  if (sol.before) parts.push({moves: toks(sol.before), layer: true});
+  if (sol.entry) parts.push({moves: toks(sol.entry.alg), layer: false});
+  if (sol.tail) parts.push({moves: toks(sol.tail), layer: true});
+  const open = parts.map(() => 0), close = parts.map(() => 0);
+  let clash = false;
+  for (let i = 0; i + 1 < parts.length; i++){
+    const n = meeting(parts[i].moves, parts[i + 1].moves);
+    open[i] = n; close[i + 1] = n;
+  }
+  parts.forEach((p, i) => { if (open[i] + close[i] > p.moves.length) clash = true; });
+  parts.forEach((p, i) => {
+    const line = add(blk, "div", undefined, "part");
+    if (i === 0) add(line, "b", String(sol.angle));
+    const m = p.moves.slice();
+    if (!clash){
+      if (close[i]) m[close[i] - 1] += ")";
+      if (open[i]) m[m.length - open[i]] = "(" + m[m.length - open[i]];
+    }
+    add(line, "span", m.join(" "), "mv");
+    const note = add(line, "span", " / ", "note");
+    if (p.layer) note.append(layerLabel);
+    else { const a = add(note, "a", sol.letter + " " + caseName(sol.n)); a.href = "index.html" + caseHash(sol.letter, sol.n); a.target = "_blank"; a.rel = "noopener"; }
+  });
+  if (!parts.length) add(blk, "div", "solved", "part");
+  if (sol.cancelled){
+    const fin = add(blk, "div", undefined, "part final");
+    add(fin, "span", "final: ", "note"); add(fin, "span", sol.text, "mv");
+  }
+  add(blk, "div", sol.moves + (sol.moves === 1 ? " move" : " moves"), "meta");
+  blk.title = "Click to copy"; blk.style.cursor = "copy";
+  blk.onclick = e => { if (e.target.tagName !== "A") copy(sol.angle + " " + sol.text); };
+}
 async function renderSolutions(){
   const box = $("solutions"), id = ++runId;
   if (!prep){ box.textContent = ""; return; }
@@ -159,21 +206,15 @@ async function renderSolutions(){
   if (id !== runId) return;
   box.textContent = "";
   prep.options.forEach((o, i) => {
-    const card = add(box, "section", undefined, "panel sol"), h = add(card, "h3", "Solution " + (i + 1));
-    const first = o.choices[0], many = o.choices.length > 1;
-    add(h, "small", !first.layer ? "centres solved" : many ? "layer " + first.layer.replace(/^\d+ /, "") + ", any angle" : "layer " + first.layer);
+    const card = add(box, "section", undefined, "panel sol"), first = o.choices[0];
+    add(card, "h3", "Solution " + (i + 1));
     if (!ok){ add(card, "div", "Could not load the database lists for this scramble.", "msg"); return; }
     for (let k = 0; k < count(o); k++){
       const v0 = first.variants[k], blk = add(card, "div", undefined, "var");
       if (abl && first.layer) add(blk, "div", kind(v0), "kind");
       const sol = CFS.finishOption(o, k, column, limit);
       if (!sol){ add(blk, "div", "No algorithm in this pool fits" + (no11 ? " without 11-move algorithms." : "."), "msg"); continue; }
-      const main = add(blk, "div", undefined, "main");
-      add(main, "b", String(sol.angle)); main.append(sol.text || "–");
-      main.title = "Click to copy"; main.onclick = () => copy(sol.angle + " " + sol.text);
-      const meta = add(blk, "div", sol.moves + (sol.moves === 1 ? " move · " : " moves · ") + (many ? "layer " + sol.layer + " · " : "") + "case ", "meta");
-      if (!sol.entry) meta.append("solved");
-      else { const a = add(meta, "a", sol.letter + " " + caseName(sol.n)); a.href = "index.html" + caseHash(sol.letter, sol.n); a.target = "_blank"; a.rel = "noopener"; }
+      renderParts(blk, sol, "layer " + sol.layer);
     }
   });
 }
