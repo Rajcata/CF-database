@@ -158,17 +158,22 @@ var CFS = (function(){
             start: start, pre: pre, suf: suf, held: held, ang: ang,
             angles: held.map(function(K){ return byKey.get(key(K)) || []; })};
   }
+  // options = what the page shows as Solution 1, 2: normally one per sheet algorithm.
+  // An option has one or more interchangeable choices (the 3-move layer: 24 angles),
+  // each with the same list of variants.
   function prepare(x){
     var ph = pictureHolding(x), layer = null;
     for (var i = 0; i < D.layers.length; i++) if (D.layers[i].pic === ph.pic) layer = D.layers[i];
     if (!layer) throw new Error("layer picture not in the sheet: " + ph.pic);
-    var algs = layer.algs.length ? layer.algs : [{text: "", words: null}];
+    var groups = layer.options.length ? layer.options : [[{text: "", words: null}]];
     var ang = scrambleAngles(ph.rot);
-    var options = algs.map(function(a){
-      var size = a.words ? split(a.words[0]).length : 0, splits = [size], j;
-      if (size > 0) splits.push(0);
-      for (j = 1; j < size; j++) splits.push(j);
-      return {layer: a.text, variants: splits.map(function(j){ return variant(ph.state, a, j, size, ang); })};
+    var options = groups.map(function(group){
+      return {choices: group.map(function(a){
+        var size = a.words ? split(a.words[0]).length : 0, splits = [size], j;
+        if (size > 0) splits.push(0);
+        for (j = 1; j < size; j++) splits.push(j);
+        return {layer: a.text, variants: splits.map(function(j){ return variant(ph.state, a, j, size, ang); })};
+      })};
     });
     return {pic: ph.pic, options: options};
   }
@@ -223,6 +228,17 @@ var CFS = (function(){
             before: v.pre[best.h].join(" "), after: v.suf[best.h].join(" "), letter: v.letter, n: v.n,
             rank: best.rank, entry: best.entry, cancelled: best.cut};
   }
+  // best solution of an option for its k-th variant, over all its choices
+  // (shortest; ties: better rated algorithm, then the earlier choice).
+  // columnOf(variant) gives that variant's database list.
+  function finishOption(option, k, columnOf, limit){
+    var best = null;
+    option.choices.forEach(function(c){
+      var v = c.variants[k], s = finish(v, v.done ? [] : columnOf(v), limit);
+      if (s && (!best || s.moves < best.moves || (s.moves === best.moves && s.rank < best.rank))) best = s;
+    });
+    return best;
+  }
   return {parseScramble: parseScramble, randomScramble: randomScramble, randomState: randomState, isNear: isNear,
-          prepare: prepare, finish: finish, merge: merge};
+          prepare: prepare, finish: finish, finishOption: finishOption, merge: merge};
 })();

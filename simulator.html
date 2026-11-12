@@ -75,10 +75,10 @@ button[aria-pressed=true],button.primary{background:var(--accent);border-color:v
   <div id="solutions" style="display:grid;gap:14px;grid-template-columns:minmax(0,1fr)"></div>
 </main>
 <div id="toast" role="status"></div>
-<script src="trainer_data.js?v=3"></script>
-<script src="trainer_core.js?v=3"></script>
-<script src="sim_data.js?v=3"></script>
-<script src="sim_core.js?v=3"></script>
+<script src="trainer_data.js?v=4"></script>
+<script src="trainer_core.js?v=4"></script>
+<script src="sim_data.js?v=4"></script>
+<script src="sim_core.js?v=4"></script>
 <script>
 "use strict";
 const DIGIT = ["0","+","−"];
@@ -151,26 +151,30 @@ function kind(v){
 async function renderSolutions(){
   const box = $("solutions"), id = ++runId;
   if (!prep){ box.textContent = ""; return; }
-  const shown = prep.options.map(o => abl ? o.variants : o.variants.slice(0, 1));
-  const loaded = await Promise.all(shown.map(vs => Promise.all(vs.map(v => v.done ? true : load(v.letter, v.n)))));
+  // which variants are shown (same list for every choice of an option)
+  const count = o => abl ? o.choices[0].variants.length : 1;
+  const need = [];
+  prep.options.forEach(o => o.choices.forEach(c => c.variants.slice(0, count(o)).forEach(v => { if (!v.done) need.push(load(v.letter, v.n)); })));
+  const ok = (await Promise.all(need)).every(x => x);
   if (id !== runId) return;
   box.textContent = "";
   prep.options.forEach((o, i) => {
     const card = add(box, "section", undefined, "panel sol"), h = add(card, "h3", "Solution " + (i + 1));
-    add(h, "small", o.layer ? "layer " + o.layer : "centres solved");
-    shown[i].forEach((v, k) => {
-      const blk = add(card, "div", undefined, "var");
-      if (abl && o.layer) add(blk, "div", kind(v), "kind");
-      if (!loaded[i][k]){ add(blk, "div", "Could not load case " + v.letter + " " + caseName(v.n) + ".", "msg"); return; }
-      const sol = CFS.finish(v, column(v), limit);
-      if (!sol){ add(blk, "div", "No algorithm in this pool fits" + (no11 ? " without 11-move algorithms." : "."), "msg"); return; }
+    const first = o.choices[0], many = o.choices.length > 1;
+    add(h, "small", !first.layer ? "centres solved" : many ? "layer " + first.layer.replace(/^\d+ /, "") + ", any angle" : "layer " + first.layer);
+    if (!ok){ add(card, "div", "Could not load the database lists for this scramble.", "msg"); return; }
+    for (let k = 0; k < count(o); k++){
+      const v0 = first.variants[k], blk = add(card, "div", undefined, "var");
+      if (abl && first.layer) add(blk, "div", kind(v0), "kind");
+      const sol = CFS.finishOption(o, k, column, limit);
+      if (!sol){ add(blk, "div", "No algorithm in this pool fits" + (no11 ? " without 11-move algorithms." : "."), "msg"); continue; }
       const main = add(blk, "div", undefined, "main");
       add(main, "b", String(sol.angle)); main.append(sol.text || "–");
       main.title = "Click to copy"; main.onclick = () => copy(sol.angle + " " + sol.text);
-      const meta = add(blk, "div", sol.moves + (sol.moves === 1 ? " move · case " : " moves · case "), "meta");
-      if (v.done) meta.append("solved");
+      const meta = add(blk, "div", sol.moves + (sol.moves === 1 ? " move · " : " moves · ") + (many ? "layer " + sol.layer + " · " : "") + "case ", "meta");
+      if (!sol.entry) meta.append("solved");
       else { const a = add(meta, "a", sol.letter + " " + caseName(sol.n)); a.href = "index.html" + caseHash(sol.letter, sol.n); a.target = "_blank"; a.rel = "noopener"; }
-    });
+    }
   });
 }
 function show(scr){
