@@ -20,6 +20,9 @@ a{color:var(--accent)}
 header{padding:18px 20px 6px;max-width:1180px;margin:0 auto}
 h1{font-size:20px;margin:0;letter-spacing:.01em}
 header p{margin:2px 0 0;color:var(--muted);font-size:13px}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+nav a{padding:5px 12px;border:1px solid var(--line);border-radius:7px;text-decoration:none;color:var(--ink);font-size:14px}
+nav a[aria-current=page]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 main{max-width:1180px;margin:0 auto;padding:10px 20px 40px;display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
 .train{grid-column:2;grid-row:1}
 .side{grid-column:1;grid-row:1;display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
@@ -104,7 +107,8 @@ svg{display:block;height:auto}
 <body>
 <header>
   <h1>CF trainer</h1>
-  <p>Skewb, centers first. Scramble into a chosen case, time yourself, repeat. <a href="index.html">Algorithm database</a></p>
+  <p>Skewb, centers first. Scramble into a chosen case, time yourself, repeat.</p>
+  <nav><a href="index.html">Database</a><a href="trainer.html" aria-current="page">Trainer</a><a href="simulator.html">Simulator</a></nav>
 </header>
 <main>
   <section class="panel train">
