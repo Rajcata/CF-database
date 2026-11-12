@@ -66,6 +66,7 @@ button[aria-pressed=true],button.primary{background:var(--accent);border-color:v
     </div>
     <p class="err" id="err" hidden></p>
     <div class="row" style="margin-top:12px"><span class="label">Algorithms</span><div class="chips" id="pool"></div></div>
+    <div class="row" style="margin-top:8px"><span class="label">11-move algorithms</span><div class="chips" id="eleven"></div></div>
   </section>
   <div id="solutions" style="display:grid;gap:14px;grid-template-columns:minmax(0,1fr)"></div>
 </main>
@@ -80,8 +81,8 @@ const DIGIT = ["0","+","−"];
 const POOLS = [[1,"Top algorithm"],[10,"Top 10"],[Infinity,"All"]];
 const $ = id => document.getElementById(id);
 
-let limit = 10, current = null, prep = null, runId = 0;
-try { const v = localStorage.getItem("cf-sim-pool"); if (v === "1") limit = 1; else if (v === "all") limit = Infinity; } catch (e) {}
+let limit = 10, no11 = false, current = null, prep = null, runId = 0;
+try { const v = localStorage.getItem("cf-sim-pool"); if (v === "1") limit = 1; else if (v === "all") limit = Infinity; no11 = localStorage.getItem("cf-sim-no11") === "1"; } catch (e) {}
 
 const cache = {}, waiting = {};
 window.CF_DATA = function(letter, n, text){
@@ -118,6 +119,16 @@ function renderPool(){
     b.onclick = () => { limit = val; try { localStorage.setItem("cf-sim-pool", val === Infinity ? "all" : String(val)); } catch (e) {} renderPool(); renderSolutions(); };
   }
 }
+function renderEleven(){
+  const box = $("eleven"); box.textContent = "";
+  for (const [val, text] of [[false, "Used"], [true, "Not used"]]){
+    const b = add(box, "button", text);
+    b.setAttribute("aria-pressed", no11 === val);
+    b.onclick = () => { no11 = val; try { localStorage.setItem("cf-sim-no11", val ? "1" : "0"); } catch (e) {} renderEleven(); renderSolutions(); };
+  }
+}
+// the case's list as the pool sees it: with 11-move algorithms left out if switched off
+function column(o){ const c = cache[o.letter + o.n] || []; return no11 ? c.filter(e => e.moves <= 10) : c; }
 async function renderSolutions(){
   const box = $("solutions"), id = ++runId;
   if (!prep){ box.textContent = ""; return; }
@@ -127,8 +138,8 @@ async function renderSolutions(){
   prep.options.forEach((o, i) => {
     const card = add(box, "section", undefined, "panel sol"), h = add(card, "h3", "Solution " + (i + 1));
     if (!loaded[i]){ add(card, "div", "Could not load case " + o.letter + " " + caseName(o.n) + ".", "msg"); return; }
-    const sol = CFS.finish(o, cache[o.letter + o.n] || [], limit);
-    if (!sol){ add(card, "div", "No algorithm in this pool fits layer " + o.layer + ".", "msg"); return; }
+    const sol = CFS.finish(o, column(o), limit);
+    if (!sol){ add(card, "div", "No algorithm in this pool fits layer " + o.layer + (no11 ? " without 11-move algorithms." : "."), "msg"); return; }
     add(h, "small", sol.moves + (sol.moves === 1 ? " move" : " moves"));
     const main = add(card, "div", undefined, "main");
     add(main, "b", String(sol.angle)); main.append(sol.text || "–");
@@ -156,7 +167,7 @@ function useTyped(){
 }
 $("use").onclick = useTyped;
 $("typed").addEventListener("keydown", e => { if (e.key === "Enter") useTyped(); });
-renderPool();
+renderPool(); renderEleven();
 show(CFS.randomScramble());
 </script>
 </body>
