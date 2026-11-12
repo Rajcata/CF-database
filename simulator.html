@@ -70,15 +70,15 @@ button[aria-pressed=true],button.primary{background:var(--accent);border-color:v
     <p class="err" id="err" hidden></p>
     <div class="row" style="margin-top:12px"><span class="label">Algorithms</span><div class="chips" id="pool"></div></div>
     <div class="row" style="margin-top:8px"><span class="label">11-move algorithms</span><div class="chips" id="eleven"></div></div>
-    <div class="row" style="margin-top:8px"><span class="label">ABL (alg before layer)</span><div class="chips" id="abl"></div></div>
+    <div class="row" style="margin-top:8px"><span class="label">ABL</span><div class="chips" id="abl"></div></div>
   </section>
   <div id="solutions" style="display:grid;gap:14px;grid-template-columns:minmax(0,1fr)"></div>
 </main>
 <div id="toast" role="status"></div>
-<script src="trainer_data.js"></script>
-<script src="trainer_core.js"></script>
-<script src="sim_data.js"></script>
-<script src="sim_core.js"></script>
+<script src="trainer_data.js?v=3"></script>
+<script src="trainer_core.js?v=3"></script>
+<script src="sim_data.js?v=3"></script>
+<script src="sim_core.js?v=3"></script>
 <script>
 "use strict";
 const DIGIT = ["0","+","−"];
@@ -144,7 +144,7 @@ function column(v){ const c = cache[v.letter + v.n] || []; return no11 ? c.filte
 // name of a variant: where the algorithm sits among the layer moves
 function kind(v){
   if (v.split === v.size) return "Layer, alg";
-  if (v.split === 0) return "ABL: alg, layer";
+  if (v.split === 0) return "ABL";
   const m = k => k + (k === 1 ? " move" : " moves");
   return m(v.split) + ", alg, " + m(v.size - v.split);
 }
