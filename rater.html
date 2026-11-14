@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CF rater</title>
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#ffffff; --ink:#1c1d21; --muted:#6a6d76; --line:#dcdad3;
+  --accent:#b3401f; --accent-ink:#ffffff; --row:#f1efe9;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#17181b; --panel:#202226; --ink:#eceae4; --muted:#9a9da6; --line:#34363c;
+    --accent:#f08a5d; --accent-ink:#17181b; --row:#26282d; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header,main{max-width:1100px;margin:0 auto;padding:16px 20px 0}
+main{padding-bottom:40px;display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+h1{font-size:20px;margin:0}
+header p{margin:2px 0 0;color:var(--muted);font-size:13px}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+nav a{padding:5px 12px;border:1px solid var(--line);border-radius:7px;text-decoration:none;color:var(--ink);font-size:14px}
+nav a[aria-current=page]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+textarea{width:100%;min-height:150px;font:14px var(--mono);padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);resize:vertical}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:7px;cursor:pointer;padding:6px 14px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;margin-top:10px}
+select{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+label{font-size:14px;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+td.alg{font-family:var(--mono);font-size:14px}
+td.exec{font-family:var(--mono);font-size:14px;color:var(--accent)}
+.msg{color:var(--muted);font-size:13px;margin:8px 0 0}
+.bad{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>CF rater</h1>
+  <p>Rates an algorithm by simulating how it is executed. Score = effective move count, lower is better. Experimental: the database still uses the older rater.</p>
+  <nav><a href="index.html">Database</a><a href="trainer.html">Trainer</a><a href="simulator.html">Simulator</a><a href="rater.html" aria-current="page">Rater</a></nav>
+</header>
+<main>
+  <section class="panel">
+    <textarea id="algs" spellcheck="false" aria-label="Algorithms, one per line" placeholder="One algorithm per line, for example: r' R r R'"></textarea>
+    <div class="row">
+      <button class="primary" id="go">Rate</button>
+      <label><input type="checkbox" id="showexec" checked> Show intended execution</label>
+      <label>Numbers <select id="preset"><option value="fitted">fitted</option><option value="stated">first set</option></select></label>
+    </div>
+    <p class="msg">One algorithm per line, in r R b B (Rp works for R'). An angle number in front is ignored.</p>
+    <p class="msg bad" id="err" hidden></p>
+  </section>
+  <section class="panel">
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="num">#</th><th class="num">Rater 2</th><th class="num">Moves</th><th>Algorithm</th><th id="h-exec">Intended execution</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="msg">ft / ut / bt / dt = thumb front / up / back / down, written at the start and after each regrip. z and z' are rotations inside the algorithm; after one the moves are written as they are turned from the new angle. A star marks a move done by the left hand in a special way: R'* and B'* with the right thumb lifted, b'* with the left ring finger.</p>
+  </section>
+</main>
+<script src="rater2_core.js?v=1"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+function run(){
+  const lines = $("algs").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean), bad = [], out = [];
+  for (const line of lines){
+    const toks = RATER2.parse(line);
+    if (!toks){ bad.push(line); continue; }
+    const r = RATER2.rate(toks, $("preset").value === "stated" ? RATER2.STATED : null);
+    out.push({alg: toks.join(" "), r: r});
+  }
+  out.sort((a, b) => a.r.units - b.r.units || a.r.moves - b.r.moves);
+  $("err").hidden = !bad.length;
+  $("err").textContent = bad.length ? "Not understood (only r R b B moves): " + bad.join(" | ") : "";
+  const body = $("rows"); body.textContent = "";
+  const showExec = $("showexec").checked;
+  $("h-exec").hidden = !showExec;
+  out.forEach((x, i) => {
+    const tr = document.createElement("tr");
+    const cells = [[i + 1, "num"], [x.r.score.toFixed(2), "num"], [x.r.moves, "num"]];
+    cells.push([x.alg, "alg"]);
+    if (showExec) cells.push([x.r.execution, "exec"]);
+    for (const [t, c] of cells){ const td = document.createElement("td"); td.textContent = t; td.className = c; tr.append(td); }
+    body.append(tr);
+  });
+}
+$("go").onclick = run;
+$("showexec").onchange = run; $("preset").onchange = run;
+run();
+</script>
+</body>
+</html>
