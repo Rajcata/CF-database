@@ -31,7 +31,7 @@ var RATER2 = (function(){
     ring: 10,          // b' with the left ring finger, thumb on the bottom (tuned)
     lateRegrip: 0,     // extra for a regrip inside the last 3 moves       (tuned)
     loneLast: 15,      // a rotation or regrip with exactly one move left  (tuned)
-    rprp: 20           // r' straight after R' from homegrip (ft R' r' ends ft, but is uncomfortable)
+    rprp: 20           // r' straight after an R' that left the thumb in the back (uncomfortable)
   };
   // Fitted set, the DEFAULT (chosen by the user 2026-11-14): ALL numbers tuned against
   // the same grades and choices. It agrees better
@@ -40,7 +40,7 @@ var RATER2 = (function(){
   var COST = {rR: 60, bB: 95, small: 20, big: 60, rotation: 0, rotRegrip: 0, rotAfterLeft: 10, leftAfterRot: 20,
     rotAgain: 15, rotBack: 20, secondRotation: 60, sameKind: 0, sameKindEnd: 15, lift: 10, ring: 10, lateRegrip: 0,
     loneLast: 0, doubleTurn: 0, bonus: 30, backStart: 30,
-    rprp: 20};         // r' straight after R' from homegrip: uncomfortable (user, 2026-11-15); a third of a move, Claude's number
+    rprp: 20};         // r' straight after an R' that left the thumb in the back: uncomfortable (user, 2026-11-15); Claude's number
   // ---------- grip model ----------
   // right thumb: F front (homegrip), U up, B back, D down (bottom)
   var THUMBS = ["F", "U", "B", "D"], CODE = {F: "ft", U: "ut", B: "bt", D: "dt"};
@@ -94,8 +94,9 @@ var RATER2 = (function(){
 
   /* State: i moves done, thumb t, orientation o, dir = direction of the last rotation
      (0 none, 1 z, 2 z'), since = moves done after it (0..4, 0 = it was the last action),
-     left = the last move was done by the left hand, combo = the last step was the
-     single wrist turn R' from thumb front to thumb back (ft R' r' is uncomfortable). */
+     left = the last move was done by the left hand, combo = the last step ended with
+     an R' that left the thumb in the back (the single turn R' from front, or the insert
+     R r R' from the bottom): an r' straight after that is uncomfortable. */
   function steps(alg, s, C){
     var n = alg.length, i = s.i, t = s.t, o = s.o, out = [], e = [], k;
     for (k = i; k < n && k < i + 3; k++) e.push(rename(alg[k], o));
@@ -110,7 +111,7 @@ var RATER2 = (function(){
       for (q = 0; q + 1 < len; q++) if (sameKind(e[q], e[q + 1])) c += C.sameKind + (i + q + 2 === n ? C.sameKindEnd : 0);
       if (justRotated && firstLeft) c += C.leftAfterRot;
       out.push({i: i + len, t: to, o: o, dir: s.dir, since: s.dir ? Math.min(4, s.since + len) : 0,
-                left: leftHand, combo: len === 1 && text === "R'" && t === "F" && to === "B", cost: c, acts: 0, text: text});
+                left: leftHand, combo: to === "B" && /R2?'$/.test(text), cost: c, acts: 0, text: text});
     }
     // a left-hand move done in a special way; on equal cost the ordinary way is preferred
     function special(to, cost, text){ var before = out.length; move(1, to, cost, text, true, true); if (out.length > before) out[out.length - 1].acts = 1; }
