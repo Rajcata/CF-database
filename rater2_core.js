@@ -30,7 +30,8 @@ var RATER2 = (function(){
     lift: 0,           // left-hand move with the right thumb lifted       (tuned)
     ring: 10,          // b' with the left ring finger, thumb on the bottom (tuned)
     lateRegrip: 0,     // extra for a regrip inside the last 3 moves       (tuned)
-    loneLast: 15       // a rotation or regrip with exactly one move left  (tuned)
+    loneLast: 15,      // a rotation or regrip with exactly one move left  (tuned)
+    rprp: 20           // r' straight after R' from homegrip (ft R' r' ends ft, but is uncomfortable)
   };
   // Fitted set, the DEFAULT (chosen by the user 2026-11-14): ALL numbers tuned against
   // the same grades and choices. It agrees better
@@ -38,7 +39,8 @@ var RATER2 = (function(){
   // cheaper, bigger start/end bonus, no same-kind and no double-turn penalty).
   var COST = {rR: 60, bB: 95, small: 20, big: 60, rotation: 0, rotRegrip: 0, rotAfterLeft: 10, leftAfterRot: 20,
     rotAgain: 15, rotBack: 20, secondRotation: 60, sameKind: 0, sameKindEnd: 15, lift: 10, ring: 10, lateRegrip: 0,
-    loneLast: 0, doubleTurn: 0, bonus: 30, backStart: 30};
+    loneLast: 0, doubleTurn: 0, bonus: 30, backStart: 30,
+    rprp: 20};         // r' straight after R' from homegrip: uncomfortable (user, 2026-11-15); a third of a move, Claude's number
   // ---------- grip model ----------
   // right thumb: F front (homegrip), U up, B back, D down (bottom)
   var THUMBS = ["F", "U", "B", "D"], CODE = {F: "ft", U: "ut", B: "bt", D: "dt"};
@@ -92,7 +94,8 @@ var RATER2 = (function(){
 
   /* State: i moves done, thumb t, orientation o, dir = direction of the last rotation
      (0 none, 1 z, 2 z'), since = moves done after it (0..4, 0 = it was the last action),
-     left = the last move was done by the left hand. */
+     left = the last move was done by the left hand, combo = the last step was the
+     single wrist turn R' from thumb front to thumb back (ft R' r' is uncomfortable). */
   function steps(alg, s, C){
     var n = alg.length, i = s.i, t = s.t, o = s.o, out = [], e = [], k;
     for (k = i; k < n && k < i + 3; k++) e.push(rename(alg[k], o));
@@ -102,11 +105,12 @@ var RATER2 = (function(){
     function mc(tok){ return tok[0] === "r" || tok[0] === "R" ? C.rR : C.bB; }
     function move(len, to, cost, text, leftHand, firstLeft){
       var c = cost, q;
+      if (s.combo && len === 1 && text === "r'" && t === "B") c += C.rprp;
       if (prev && sameKind(prev, e[0])) c += C.sameKind + (i + 1 === n ? C.sameKindEnd : 0);
       for (q = 0; q + 1 < len; q++) if (sameKind(e[q], e[q + 1])) c += C.sameKind + (i + q + 2 === n ? C.sameKindEnd : 0);
       if (justRotated && firstLeft) c += C.leftAfterRot;
       out.push({i: i + len, t: to, o: o, dir: s.dir, since: s.dir ? Math.min(4, s.since + len) : 0,
-                left: leftHand, cost: c, acts: 0, text: text});
+                left: leftHand, combo: len === 1 && text === "R'" && t === "F" && to === "B", cost: c, acts: 0, text: text});
     }
     // a left-hand move done in a special way; on equal cost the ordinary way is preferred
     function special(to, cost, text){ var before = out.length; move(1, to, cost, text, true, true); if (out.length > before) out[out.length - 1].acts = 1; }
@@ -140,7 +144,7 @@ var RATER2 = (function(){
       var late = (left3 ? C.lateRegrip : 0) + (n - i === 1 ? C.loneLast : 0);
       if (i > 0) THUMBS.forEach(function(to){
         if (to === t) return;
-        out.push({i: i, t: to, o: o, dir: s.dir, since: s.since, left: s.left,
+        out.push({i: i, t: to, o: o, dir: s.dir, since: s.since, left: s.left, combo: false,
                   cost: (t === "F" || to === "F" ? C.small : C.big) + late, acts: 1, text: CODE[to]});
       });
       if (i > 0) [1, 2].forEach(function(d){
@@ -153,7 +157,7 @@ var RATER2 = (function(){
           if (justRotated) c += C.secondRotation;
           else if (s.dir === d && s.since <= 3) c += C.rotAgain;
           else if (s.dir && s.dir !== d && s.since <= 4) c += C.rotBack;
-          out.push({i: i, t: r[0], o: (o + (d === 1 ? 1 : 3)) % 4, dir: d, since: 0, left: s.left,
+          out.push({i: i, t: r[0], o: (o + (d === 1 ? 1 : 3)) % 4, dir: d, since: 0, left: s.left, combo: false,
                     cost: c, acts: 1, text: z + (r[1] ? " " + CODE[r[0]] : "")});
         });
       });
@@ -188,13 +192,13 @@ var RATER2 = (function(){
     var C = COST;
     if (costs){ C = {}; for (var k in COST) C[k] = k in costs ? costs[k] : COST[k]; }
     var n = alg.length, best = new Map(), heap = new Heap();
-    function id(s){ return s.i * 4000 + THUMBS.indexOf(s.t) * 1000 + s.o * 250 + s.dir * 80 + s.since * 10 + (s.left ? 1 : 0); }
+    function id(s){ return s.i * 4000 + THUMBS.indexOf(s.t) * 1000 + s.o * 250 + s.dir * 80 + s.since * 10 + (s.left ? 1 : 0) + (s.combo ? 2 : 0); }
     function push(s){
       var key = id(s), old = best.get(key);
       if (!old || less(s, old)){ best.set(key, s); heap.push(s); }
     }
     for (var o = 0; o < 4; o++) THUMBS.forEach(function(t){
-      push({i: 0, t: t, o: o, dir: 0, since: 0, left: false, cost: t === "B" ? C.backStart : 0, acts: 0,
+      push({i: 0, t: t, o: o, dir: 0, since: 0, left: false, combo: false, cost: t === "B" ? C.backStart : 0, acts: 0,
             prev: null, text: CODE[t], start: o});
     });
     var done = null;
