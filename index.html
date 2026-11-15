@@ -62,6 +62,9 @@ tbody tr:hover{background:var(--row)}
 td.alg{font-family:var(--mono);font-size:14px;cursor:copy}
 td.num, th.num{text-align:right}
 td.ang{font-family:var(--mono);font-size:13px;color:var(--muted)}
+td.exec{font-family:var(--mono);font-size:13px;color:var(--accent)}
+.execopt{font-size:13px;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+[hidden]{display:none !important}
 .msg{padding:26px 10px;text-align:center;color:var(--muted)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:7px 14px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.on{opacity:1}
@@ -71,7 +74,7 @@ td.ang{font-family:var(--mono);font-size:13px;color:var(--muted)}
 <header>
   <h1>CF algorithm database</h1>
   <p>Skewb, centers first. Every solution of up to 11 moves in r R b B, in all 6 versions, rated.</p>
-  <nav><a href="index.html" aria-current="page">Database</a><a href="trainer.html">Trainer</a><a href="simulator.html">Simulator</a><a href="rater.html">Rater</a></nav>
+  <nav><a href="index.html" aria-current="page">Database</a><a href="trainer.html">Trainer</a><a href="simulator.html">Simulator</a></nav>
 </header>
 <main>
   <div class="side">
@@ -98,10 +101,14 @@ td.ang{font-family:var(--mono);font-size:13px;color:var(--muted)}
       <div class="title" id="title"></div>
       <div class="chips" id="chips"></div>
     </div>
+    <div class="bar" style="justify-content:flex-start">
+      <div class="chips" id="raters"><span>Rater</span><button data-r="maxooma">Maxooma</button><button data-r="rater2">Rater 2</button></div>
+      <label class="execopt" id="execopt" hidden><input type="checkbox" id="showexec"> Show intended execution</label>
+    </div>
     <p class="count" id="count"></p>
     <div class="tablewrap">
       <table>
-        <thead><tr><th class="num">#</th><th class="num">Rater score</th><th class="num">Moves</th><th>Angle</th><th>Algorithm</th></tr></thead>
+        <thead><tr><th class="num">#</th><th class="num" id="h-score">Rater score</th><th class="num">Moves</th><th>Angle</th><th>Algorithm</th><th id="h-exec" hidden>Intended execution</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div class="msg" id="msg" hidden></div>
@@ -113,6 +120,7 @@ td.ang{font-family:var(--mono);font-size:13px;color:var(--muted)}
 var CF_MANIFEST = {subsets: []};
 </script>
 <script src="data/manifest.js"></script>
+<script src="rater2_core.js?v=1"></script>
 <script>
 "use strict";
 const SUBSETS = {A:"3C + 22",B:"3A + 22",C:"3C + 3A adjacent",D:"3C + 3C adjacent",E:"3A + 3A adjacent",
@@ -144,6 +152,37 @@ const $ = id => document.getElementById(id);
 let state = {letter:"A", ori:[0,0,0,0,0,0], max:11};
 const cache = {};
 const waiting = {};
+// which rater sorts the list: "maxooma" (scores stored in the database) or "rater2"
+// (scored here in the browser, per case, the first time the case is shown)
+let rater = "maxooma";
+try { if (localStorage.getItem("cf-rater") === "rater2") rater = "rater2"; } catch (e) {}
+const cache2 = {};
+let job = 0;
+// angle number after an algorithm is renamed by one z (exported from the model:
+// rotation h -> z * h), used when Rater 2 writes an algorithm from another angle
+const ZANGLE = [10,6,18,14,9,22,19,4,13,23,7,3,17,24,11,2,5,21,15,1,12,16,20,8];
+const ZTIMES = {"": 0, "z": 1, "z2": 2, "z'": 3};
+function rate2(e){
+  const r = RATER2.rate(e.alg.split(" "));
+  const angle = e.angle.split("/").map(a => { let x = +a; for (let k = 0; k < ZTIMES[r.angle]; k++) x = ZANGLE[x - 1]; return x; })
+    .sort((a, b) => a - b).join("/");
+  return {units: r.units, score: r.score.toFixed(2), moves: e.moves, angle: angle, alg: r.written, exec: r.execution};
+}
+// scores a case's list with Rater 2 in small batches so the page stays responsive
+function withRater2(key, list, done){
+  if (cache2[key]) return done();
+  const mine = ++job, out = [];
+  (function batch(){
+    if (mine !== job) return;
+    const end = Math.min(list.length, out.length + 120);
+    for (let i = out.length; i < end; i++) out.push(rate2(list[i]));
+    if (out.length < list.length){
+      $("msg").hidden = false; $("rows").textContent = "";
+      $("msg").textContent = "Rating with Rater 2… " + out.length.toLocaleString("en") + " of " + list.length.toLocaleString("en");
+      setTimeout(batch, 0);
+    } else { cache2[key] = out; done(); }
+  })();
+}
 
 function el(name, attrs, text){
   const e = document.createElementNS(svgNS, name);
@@ -226,9 +265,18 @@ function load(letter, n, done){
   document.head.append(s);
 }
 function showMsg(t){ $("rows").textContent = ""; $("msg").hidden = false; $("msg").textContent = t; $("count").textContent = ""; $("chips").textContent = ""; }
+function renderRaters(){
+  document.querySelectorAll("#raters button").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === rater));
+  $("execopt").hidden = rater !== "rater2";
+}
 function renderTable(){
-  const list = cache[state.letter + caseIndex(state.ori)];
-  if (!list) return;
+  const key = state.letter + caseIndex(state.ori), base = cache[key];
+  if (!base) return;
+  renderRaters();
+  if (rater === "rater2" && !cache2[key]) return withRater2(key, base, () => { if (key === state.letter + caseIndex(state.ori)) renderTable(); });
+  const r2 = rater === "rater2";
+  // Rater 2: lower score is better; ties by fewer moves, then the database order
+  const list = r2 ? cache2[key].map((e, i) => [e, i]).sort((a, b) => a[0].units - b[0].units || a[0].moves - b[0].moves || a[1] - b[1]).map(x => x[0]) : base;
   const lens = [...new Set(list.map(e => e.moves))].sort((a,b)=>a-b);
   const chips = $("chips"); chips.textContent = "";
   const lab = document.createElement("span"); lab.textContent = "Max moves"; chips.append(lab);
@@ -240,8 +288,13 @@ function renderTable(){
     chips.append(b);
   }
   const shown = list.filter(e => e.moves <= state.max);
+  const showExec = r2 && $("showexec").checked;
+  $("h-score").textContent = r2 ? "Rater 2" : "Rater score";
+  $("h-score").title = r2 ? "Effective move count: lower is better" : "Maxooma rater: higher is better";
+  $("h-exec").hidden = !showExec;
   $("count").textContent = shown.length.toLocaleString("en") + " of " + list.length.toLocaleString("en") +
-    " algorithms" + (state.max < 11 ? " (" + state.max + " moves or fewer)" : "") + ", best rated first";
+    " algorithms" + (state.max < 11 ? " (" + state.max + " moves or fewer)" : "") + ", best rated first" +
+    (r2 ? " by Rater 2 (effective move count, lower is better)" : "");
   const body = $("rows"); body.textContent = "";
   $("msg").hidden = shown.length > 0;
   if (!shown.length) $("msg").textContent = "No algorithm of " + state.max + " moves or fewer for this case.";
@@ -249,9 +302,10 @@ function renderTable(){
   shown.forEach((e, i) => {
     const tr = document.createElement("tr");
     const cells = [[i+1,"num"],[e.score,"num"],[e.moves,"num"],[e.angle,"ang"],[e.alg,"alg"]];
+    if (showExec) cells.push([e.exec, "exec"]);
     for (const [t,c] of cells){ const td = document.createElement("td"); td.textContent = t; td.className = c; tr.append(td); }
-    tr.lastChild.title = "Click to copy";
-    tr.lastChild.onclick = () => copy(e.angle + " " + e.alg);
+    tr.children[4].title = "Click to copy";
+    tr.children[4].onclick = () => copy(e.angle + " " + e.alg);
     tr.onmouseenter = () => drawAngles(e.angle.split("/").map(Number));
     frag.append(tr);
   });
@@ -263,6 +317,7 @@ function copy(text){
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, () => {});
 }
 function update(){
+  job++;
   const h = "#" + state.letter + state.ori.join("") + (state.max < 11 ? "m" + state.max : "");
   if (location.hash !== h) history.replaceState(null, "", h);
   renderControls();
@@ -275,6 +330,11 @@ function fromHash(){
   const m = /^#([A-O])([012]{6})(?:m(\d+))?$/.exec(location.hash);
   if (m) state = {letter:m[1], ori:[...m[2]].map(Number), max: m[3] ? Math.min(11, +m[3]) : 11};
 }
+document.querySelectorAll("#raters button").forEach(b => b.onclick = () => {
+  rater = b.dataset.r; try { localStorage.setItem("cf-rater", rater); } catch (e) {} job++; renderRaters(); renderTable();
+});
+$("showexec").onchange = renderTable;
+renderRaters();
 window.addEventListener("hashchange", () => { fromHash(); update(); });
 fromHash();
 if (!location.hash && CF_MANIFEST.subsets.length && !CF_MANIFEST.subsets.includes(state.letter)) state.letter = CF_MANIFEST.subsets[0];
