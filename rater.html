@@ -26,6 +26,9 @@ nav a[aria-current=page]{background:var(--accent);border-color:var(--accent);col
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
 textarea{width:100%;min-height:150px;font:14px var(--mono);padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);resize:vertical}
 button{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:7px;cursor:pointer;padding:6px 14px}
+.chips{display:inline-flex;gap:6px;flex-wrap:wrap}
+button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+[hidden]{display:none !important}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .row{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;margin-top:10px}
@@ -46,16 +49,19 @@ td.exec{font-family:var(--mono);font-size:14px;color:var(--accent)}
 <body>
 <header>
   <h1>CF rater</h1>
-  <p>Rates an algorithm by simulating how it is executed. Score = effective move count, lower is better. Experimental: the database still uses the older rater.</p>
+  <p>Rate algorithms with the Maxooma rater (the one the database uses) or with the experimental Rater 2.</p>
   <nav><a href="index.html">Database</a><a href="trainer.html">Trainer</a><a href="simulator.html">Simulator</a><a href="rater.html" aria-current="page">Rater</a></nav>
 </header>
 <main>
   <section class="panel">
     <textarea id="algs" spellcheck="false" aria-label="Algorithms, one per line" placeholder="One algorithm per line, for example: r' R r R'"></textarea>
     <div class="row">
+      <span class="chips" id="which"><button data-r="maxooma">Maxooma rater</button><button data-r="rater2">Rater 2</button></span>
+    </div>
+    <div class="row">
       <button class="primary" id="go">Rate</button>
-      <label><input type="checkbox" id="showexec" checked> Show intended execution</label>
-      <label>Numbers <select id="preset"><option value="fitted">fitted</option><option value="stated">first set</option></select></label>
+      <label class="r2only"><input type="checkbox" id="showexec" checked> Show intended execution</label>
+      <label class="r2only">Numbers <select id="preset"><option value="fitted">fitted</option><option value="stated">first set</option></select></label>
     </div>
     <p class="msg">One algorithm per line, in r R b B (Rp works for R'). An angle number in front is ignored.</p>
     <p class="msg bad" id="err" hidden></p>
@@ -63,40 +69,71 @@ td.exec{font-family:var(--mono);font-size:14px;color:var(--accent)}
   <section class="panel">
     <div class="tablewrap">
       <table>
-        <thead><tr><th class="num">#</th><th class="num">Rater 2</th><th class="num">Moves</th><th>Algorithm</th><th id="h-exec">Intended execution</th></tr></thead>
+        <thead><tr><th class="num">#</th><th class="num" id="h-score">Rater 2</th><th class="num">Moves</th><th>Algorithm</th><th id="h-exec">Intended execution</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
-    <p class="msg">ft / ut / bt / dt = thumb front / up / back / down, written at the start and after each regrip. z and z' are rotations inside the algorithm; after one the moves are written as they are turned from the new angle. A star marks a move done by the left hand in a special way: R'* and B'* with the right thumb lifted, b'* with the left ring finger.</p>
+    <p class="msg" id="legend">ft / ut / bt / dt = thumb front / up / back / down, written at the start and after each regrip. z and z' are rotations inside the algorithm; after one the moves are written as they are turned from the new angle. A star marks a move done by the left hand in a special way: R'* and B'* with the right thumb lifted, b'* with the left ring finger.</p>
   </section>
 </main>
+<!-- the Maxooma rater, loaded unmodified; it expects these three elements -->
+<div hidden><button id="btn"></button><textarea id="alg"></textarea><div id="output"></div></div>
+<script src="maxooma_rater.js?v=1"></script>
 <script src="rater2_core.js?v=1"></script>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+let which = "rater2";
+try { if (localStorage.getItem("cf-rater") === "maxooma") which = "maxooma"; } catch (e) {}
+// the Maxooma rater's result for an algorithm, computed with its own functions:
+// the best of the four z-namings, its trigger bonus, score = 10 - penalty
+function maxooma(alg){
+  const log = console.log; console.log = () => {};
+  try {
+    const names = {algRating: alg, ZalgRating: Ztranspose(alg), ZPalgRating: ZPtranspose(alg), ZTalgRating: ZTtranspose(alg)};
+    const all = {};
+    for (const k in names) all[k] = doAlg(names[k]);
+    const best = rankAlgAngles(all);
+    best.value -= detectTrigger(names[best.alg]);
+    return {score: 10 - best.value, alg: names[best.alg]};
+  } finally { console.log = log; }
+}
 function run(){
+  const r2 = which === "rater2";
+  document.querySelectorAll("#which button").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === which));
+  document.querySelectorAll(".r2only").forEach(e => e.hidden = !r2);
+  $("legend").hidden = !r2;
+  $("h-score").textContent = r2 ? "Rater 2 (lower is better)" : "Maxooma (higher is better)";
   const lines = $("algs").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean), bad = [], out = [];
   for (const line of lines){
     const toks = RATER2.parse(line);
     if (!toks){ bad.push(line); continue; }
-    const r = RATER2.rate(toks, $("preset").value === "stated" ? RATER2.STATED : null);
-    out.push({alg: toks.join(" "), r: r});
+    const alg = toks.join(" ");
+    if (r2){
+      const r = RATER2.rate(toks, $("preset").value === "stated" ? RATER2.STATED : null);
+      out.push({alg: alg, moves: toks.length, key: r.units, text: r.score.toFixed(2), exec: r.execution});
+    } else {
+      const m = maxooma(alg);
+      out.push({alg: m.alg, moves: toks.length, key: -Math.round(m.score * 100), text: m.score.toFixed(2), exec: ""});
+    }
   }
-  out.sort((a, b) => a.r.units - b.r.units || a.r.moves - b.r.moves);
+  out.sort((a, b) => a.key - b.key || a.moves - b.moves);
   $("err").hidden = !bad.length;
   $("err").textContent = bad.length ? "Not understood (only r R b B moves): " + bad.join(" | ") : "";
   const body = $("rows"); body.textContent = "";
-  const showExec = $("showexec").checked;
+  const showExec = r2 && $("showexec").checked;
   $("h-exec").hidden = !showExec;
   out.forEach((x, i) => {
     const tr = document.createElement("tr");
-    const cells = [[i + 1, "num"], [x.r.score.toFixed(2), "num"], [x.r.moves, "num"]];
-    cells.push([x.alg, "alg"]);
-    if (showExec) cells.push([x.r.execution, "exec"]);
+    const cells = [[i + 1, "num"], [x.text, "num"], [x.moves, "num"], [x.alg, "alg"]];
+    if (showExec) cells.push([x.exec, "exec"]);
     for (const [t, c] of cells){ const td = document.createElement("td"); td.textContent = t; td.className = c; tr.append(td); }
     body.append(tr);
   });
 }
+document.querySelectorAll("#which button").forEach(b => b.onclick = () => {
+  which = b.dataset.r; try { localStorage.setItem("cf-rater", which); } catch (e) {} run();
+});
 $("go").onclick = run;
 $("showexec").onchange = run; $("preset").onchange = run;
 run();
