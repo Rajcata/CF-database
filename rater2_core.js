@@ -1,46 +1,43 @@
 /* Rater 2: rates a Skewb algorithm by simulating how it is executed with both hands.
-   Rules from the user (2026-11-13/14; see CLAUDE.md "New rater" and rater2/analysis.md).
-   No page code here, and no algorithm is special-cased: everything follows from the
-   grip rules and the costs below.
+   Grip rules: the user's statements (2026-11-13/14) plus what the user's 272 main algs for
+   EG2 and NS show (2026-11-16, rater3/rules.md): thumb-up r turns, B' from the bottom grip,
+   thumb B', and rotations during which the thumb rides along. No algorithm is special-cased.
 
    Score = "effective move count" (lower is better). Costs are whole numbers in units
    of 1/60 move so that nothing depends on rounding. */
 "use strict";
 var RATER2 = (function(){
   // ---------- costs (1/60 move); every one can be overridden in rate(alg, costs) ----------
-  // Stated set: every number the user stated is kept as stated; the numbers the user
-  // did not give were tuned against the user's 56 grades and 9 main-alg choices.
-  var STATED = {
-    rR: 60,            // an r or R turn                                   (user: 1 move)
-    bB: 75,            // a b or B turn                                    (user: "small difference")
-    small: 40,         // small regrip, thumb to or from front             (user: 1.5 small regrips = 1 move)
-    big: 60,           // big regrip, between up / back / bottom           (user: 1.5 x small)
-    rotation: 0,       // a rotation that needs no regrip                  (user: free)
-    secondRotation: 60,// a rotation directly after a rotation             (user: like a big regrip)
-    sameKind: 15,      // b-move next to a B-move of the same kind         (user: quarter move)
-    doubleTurn: 12,    // r as r2', or R r R2' away from the end           (user: fifth of a move)
-    bonus: 15,         // starts with an insert / ends with an insert or b' B R'   (user: quarter move)
-    backStart: 15,     // starting with the thumb in the back              (user: quarter move)
-    rotRegrip: 0,      // extra when a rotation also needs a regrip        (tuned)
-    rotAfterLeft: 0,   // rotation directly after a left-hand flick        (tuned)
-    leftAfterRot: 0,   // left-hand flick directly after a rotation        (tuned)
-    rotAgain: 0,       // second rotation the same way within 3 moves      (tuned)
-    rotBack: 40,       // rotating back the other way within 4 moves       (tuned)
-    sameKindEnd: 15,   // extra when a same-kind pair ends the algorithm   (tuned)
-    lift: 0,           // left-hand move with the right thumb lifted       (tuned)
-    ring: 10,          // b' with the left ring finger, thumb on the bottom (tuned)
-    lateRegrip: 0,     // extra for a regrip inside the last 3 moves       (tuned)
-    loneLast: 15,      // a rotation or regrip with exactly one move left  (tuned)
-    rprp: 20           // r' straight after an R' that left the thumb in the back (uncomfortable)
+  // Tuned so that the user's EG2/NS main algs come first among the solutions of their
+  // cases, together with the user's CF grades and CF main-alg choices.
+  var COST = {
+    rR: 60,            // an r or R turn
+    bB: 85,            // a b or B turn
+    small: 10,         // small regrip (thumb to or from front)
+    big: 60,           // big regrip (between up, back, bottom)
+    rotation: 20,       // any rotation
+    rideRare: 0,      // a rotation where the thumb rides along the less usual way
+    rotRegrip: 15,      // extra when a rotation also needs a regrip
+    rotAfterLeft: 20,  // rotation directly after a left-hand flick (b, B')
+    leftAfterRot: 20,  // left-hand flick directly after a rotation
+    rotAgain: 15,      // second rotation in the same direction within 3 moves
+    rotBack: 0,       // rotating back the other way within 4 moves
+    secondRotation: 60,// a rotation directly after a rotation
+    opposite: 30,       // a turn on the corner diagonally opposite the previous one (r next to B, R next to b)
+    sameKind: 0,       // b-move next to a B-move, both primed or both unprimed
+    sameKindEnd: 15,   // ... extra when that pair ends the algorithm
+    dot: 20,            // r or r' done with the thumb up (.r, .r')
+    lift: 20,          // a move done by the left hand while the right thumb is lifted (§)
+    ring: 40,          // b' with the left ring finger (.b'), or B' from the bottom grip (.B')
+    thumbB: 0,        // B' done with the thumb, from the back grip (tB')
+    lateRegrip: 0,     // extra for a regrip inside the last 3 moves
+    loneLast: 0,       // a rotation or regrip with exactly one move left
+    doubleTurn: 10,     // r done as r2', or R r R2' away from the end
+    rprp: 20,          // r' straight after an R' that left the thumb in the back
+    insert: 40,         // bonus for every insert (r' R r, r' R' r, R r R', R r' R')
+    bonus: 30,         // extra bonus when an insert starts or ends the algorithm (or b' B R' ends it)
+    backStart: 30      // starting with the thumb in the back
   };
-  // Fitted set, the DEFAULT (chosen by the user 2026-11-14): ALL numbers tuned against
-  // the same grades and choices. It agrees better
-  // with them, but changes several numbers the user stated (b/B dearer, small regrip
-  // cheaper, bigger start/end bonus, no same-kind and no double-turn penalty).
-  var COST = {rR: 60, bB: 95, small: 20, big: 60, rotation: 0, rotRegrip: 0, rotAfterLeft: 10, leftAfterRot: 20,
-    rotAgain: 15, rotBack: 20, secondRotation: 60, sameKind: 0, sameKindEnd: 15, lift: 10, ring: 10, lateRegrip: 0,
-    loneLast: 0, doubleTurn: 0, bonus: 30, backStart: 30,
-    rprp: 20};         // r' straight after an R' that left the thumb in the back: uncomfortable (user, 2026-11-15); Claude's number
   // ---------- grip model ----------
   // right thumb: F front (homegrip), U up, B back, D down (bottom)
   var THUMBS = ["F", "U", "B", "D"], CODE = {F: "ft", U: "ut", B: "bt", D: "dt"};
@@ -66,16 +63,19 @@ var RATER2 = (function(){
     "r' B' r": [["F", "F"]],
     "r' B r":  [["F", "F"]]
   };
-  // rotations: thumb before -> possible [thumb after, regrip size]
+  // rotations: thumb before -> possible [thumb after, what it costs]
+  //   "" = the thumb rides along (the usual ones: front+z, up+z, back+z', bottom+z'),
+  //   "rideRare" = it rides along the less usual way, "small" / "big" = a regrip
   var ROTATE = {
     "z":  {F: [["D", ""], ["F", "small"]], U: [["F", ""]],
-           B: [["B", "small"], ["F", "big"]], D: [["D", "small"], ["F", "big"]]},
-    "z'": {F: [["U", ""], ["F", "small"]], U: [["U", "small"], ["F", "big"]],
-           B: [["B", "small"], ["F", "small"]], D: [["F", ""], ["D", "big"]]}
+           B: [["U", "rideRare"], ["B", "small"], ["F", "big"]], D: [["D", "small"], ["F", "big"]]},
+    "z'": {F: [["U", "rideRare"], ["F", "small"]], U: [["B", "rideRare"], ["U", "small"], ["F", "big"]],
+           B: [["D", ""], ["B", "small"], ["F", "small"]], D: [["F", ""], ["D", "big"]]}
   };
   // letters after a z rotation (the user's Ztranspose); applied o times for orientation o
   var ZMAP = {r: "b", R: "r", B: "R", b: "B"};
   var START = ["", "z", "z2", "z'"];
+  var OPPOSITE = {r: "B", B: "r", R: "b", b: "R"};
 
   function rename(tok, o){ var l = tok[0]; for (var k = 0; k < o; k++) l = ZMAP[l]; return l + tok.slice(1); }
   function isB(tok){ return tok[0] === "b" || tok[0] === "B"; }
@@ -107,6 +107,7 @@ var RATER2 = (function(){
     function move(len, to, cost, text, leftHand, firstLeft){
       var c = cost, q;
       if (s.combo && len === 1 && text === "r'" && t === "B") c += C.rprp;
+      if (prev && len === 1 && OPPOSITE[prev[0]] === e[0][0]) c += C.opposite;
       if (prev && sameKind(prev, e[0])) c += C.sameKind + (i + 1 === n ? C.sameKindEnd : 0);
       for (q = 0; q + 1 < len; q++) if (sameKind(e[q], e[q + 1])) c += C.sameKind + (i + q + 2 === n ? C.sameKindEnd : 0);
       if (justRotated && firstLeft) c += C.leftAfterRot;
@@ -120,22 +121,27 @@ var RATER2 = (function(){
       if (WRIST[m]){
         WRIST[m].forEach(function(g){ if (g[0] === t) move(1, g[1], C.rR, m, false, false); });
         if (m === "r" && t === "B") move(1, "D", C.rR + C.doubleTurn, "r2'", false, false);
+        // r and r' with the thumb up: right middle and ring finger, the thumb stays up
+        if ((m === "r" || m === "r'") && t === "U") move(1, "U", C.rR + C.dot, "." + m, false, false);
         // R' by a left index flick while the right thumb is lifted (thumb front or up)
-        if (m === "R'" && (t === "F" || t === "U")) special(t, C.rR + C.lift, "R'*");
+        if (m === "R'" && (t === "F" || t === "U")) special(t, C.rR + C.lift, "§R'");
       } else {
         var isLeft = !!LEFT_FLICK[m];
         if (t === "F") move(1, "F", C.bB, m, isLeft, isLeft);
         // B' by a left flick with the thumb lifted on top
-        if (m === "B'" && t === "U") special("U", C.bB + C.lift, "B'*");
-        // b' with the left ring finger while the thumb is on the bottom
-        if (m === "b'" && t === "D") special("D", C.bB + C.ring, "b'*");
+        if (m === "B'" && t === "U") special("U", C.bB + C.lift, "§B'");
+        // b' with the left ring finger while the thumb is on the bottom or up
+        if (m === "b'" && (t === "D" || t === "U")) special(t, C.bB + C.ring, ".b'");
+        // B' from the bottom grip (right ring finger), and B' with the thumb from the back grip
+        if (m === "B'" && t === "D") move(1, "D", C.bB + C.ring, ".B'", false, false);
+        if (m === "B'" && t === "B") move(1, "B", C.bB + C.thumbB, "tB'", false, false);
       }
     }
     if (e.length === 3){
       var three = e.join(" "), sum = mc(e[0]) + mc(e[1]) + mc(e[2]);
       var first = i === 0, last = i + 3 === n;
       (INSERT[three] || []).forEach(function(g){
-        if (g[0] === t) move(3, g[1], sum - (first ? C.bonus : 0) - (last ? C.bonus : 0), three, false, false);
+        if (g[0] === t) move(3, g[1], sum - C.insert - (first ? C.bonus : 0) - (last ? C.bonus : 0), three, false, false);
       });
       (RB[three] || []).forEach(function(g){ if (g[0] === t) move(3, g[1], sum, three, false, false); });
       if (three === "R r R" && t === "F") move(3, "B", sum + (last ? -C.bonus : C.doubleTurn), "R r R2'", false, false);
@@ -151,15 +157,16 @@ var RATER2 = (function(){
       if (i > 0) [1, 2].forEach(function(d){
         var z = d === 1 ? "z" : "z'";
         ROTATE[z][t].forEach(function(r){
-          var c = C.rotation;
-          if (r[1]) c += C[r[1]] + C.rotRegrip + (left3 ? C.lateRegrip : 0);
+          var c = C.rotation, regrip = r[1] === "small" || r[1] === "big";
+          if (r[1]) c += C[r[1]];
+          if (regrip) c += C.rotRegrip + (left3 ? C.lateRegrip : 0);
           if (n - i === 1) c += C.loneLast;
           if (s.left && !justRotated) c += C.rotAfterLeft;
           if (justRotated) c += C.secondRotation;
           else if (s.dir === d && s.since <= 3) c += C.rotAgain;
           else if (s.dir && s.dir !== d && s.since <= 4) c += C.rotBack;
           out.push({i: i, t: r[0], o: (o + (d === 1 ? 1 : 3)) % 4, dir: d, since: 0, left: s.left, combo: false,
-                    cost: c, acts: 1, text: z + (r[1] ? " " + CODE[r[0]] : "")});
+                    cost: c, acts: 1, text: z + (regrip ? " " + CODE[r[0]] : "")});
         });
       });
     }
@@ -218,11 +225,11 @@ var RATER2 = (function(){
       else { if (/^z/.test(p.text)) rotations++; if (/t$/.test(p.text)) regrips++; }
     }
     // The starting angle is free and is not written as a rotation: the execution begins
-    // with the letters of that angle. A star marks a move done by the left hand in an
-    // unusual way (thumb lifted, or b' with the ring finger).
+    // with the letters of that angle. Special fingerings are written as the user writes
+    // them: .r .r' (thumb up), .B' (bottom grip), .b' (left ring), tB' (thumb), §X (thumb lifted).
     return {score: done.cost / 60, units: done.cost, execution: parts.join(" "), moves: n,
             regrips: regrips, rotations: rotations, angle: START[angle],
             written: alg.map(function(t){ return rename(t, angle); }).join(" ")};
   }
-  return {rate: rate, parse: parse, COST: COST, STATED: STATED};
+  return {rate: rate, parse: parse, COST: COST, STATED: COST};
 })();
