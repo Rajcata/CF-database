@@ -124,12 +124,12 @@ var RATER2 = (function(){
         // r and r' with the thumb up: right middle and ring finger, the thumb stays up
         if ((m === "r" || m === "r'") && t === "U") move(1, "U", C.rR + C.dot, "." + m, false, false);
         // R' by a left index flick while the right thumb is lifted (thumb front or up)
-        if (m === "R'" && (t === "F" || t === "U")) special(t, C.rR + C.lift, "§R'");
+        if (m === "R'" && (t === "F" || t === "U")) special(t, C.rR + C.lift, "§ R'");
       } else {
         var isLeft = !!LEFT_FLICK[m];
         if (t === "F") move(1, "F", C.bB, m, isLeft, isLeft);
         // B' by a left flick with the thumb lifted on top
-        if (m === "B'" && t === "U") special("U", C.bB + C.lift, "§B'");
+        if (m === "B'" && t === "U") special("U", C.bB + C.lift, "§ B'");
         // b' with the left ring finger while the thumb is on the bottom or up
         if (m === "b'" && (t === "D" || t === "U")) special(t, C.bB + C.ring, ".b'");
         // B' from the bottom grip (right ring finger), and B' with the thumb from the back grip
@@ -145,7 +145,7 @@ var RATER2 = (function(){
       });
       (RB[three] || []).forEach(function(g){ if (g[0] === t) move(3, g[1], sum, three, false, false); });
       if (three === "R r R" && t === "F") move(3, "B", sum + (last ? -C.bonus : C.doubleTurn), "R r R2'", false, false);
-      if (three === "b' B R'" && t === "F" && last) move(3, "B", sum - C.bonus, three, false, false);
+      if (three === "b' B R'" && t === "F" && last) move(3, "B", sum - C.bonus, "(b' B R')", false, false);
     }
     if (i < n){
       var late = (left3 ? C.lateRegrip : 0) + (n - i === 1 ? C.loneLast : 0);
@@ -226,7 +226,8 @@ var RATER2 = (function(){
     }
     // The starting angle is free and is not written as a rotation: the execution begins
     // with the letters of that angle. Special fingerings are written as the user writes
-    // them: .r .r' (thumb up), .B' (bottom grip), .b' (left ring), tB' (thumb), §X (thumb lifted).
+    // them: .r .r' (thumb up), .B' (bottom grip), .b' (left ring), tB' (thumb), § X (flick with the
+    // thumb lifted), (b' B R') = swag ending, r2' / R2' = double turns, ft ut bt dt = thumb.
     return {score: done.cost / 60, units: done.cost, execution: parts.join(" "), moves: n,
             regrips: regrips, rotations: rotations, angle: START[angle],
             written: alg.map(function(t){ return rename(t, angle); }).join(" ")};
