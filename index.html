@@ -102,7 +102,7 @@ td.exec{font-family:var(--mono);font-size:13px;color:var(--accent)}
       <div class="chips" id="chips"></div>
     </div>
     <div class="bar" style="justify-content:flex-start">
-      <div class="chips" id="raters"><span>Rater</span><button data-r="maxooma">Maxooma</button><button data-r="rater2">Rater 2</button></div>
+      <div class="chips" id="raters"><span>Rater</span><button data-r="maxooma">Maxooma</button><button data-r="rater2">Rater 2</button><button data-r="rater3">Rater 3</button></div>
       <label class="execopt" id="execopt" hidden><input type="checkbox" id="showexec"> Show intended execution</label>
     </div>
     <p class="count" id="count"></p>
@@ -152,33 +152,36 @@ const $ = id => document.getElementById(id);
 let state = {letter:"A", ori:[0,0,0,0,0,0], max:11};
 const cache = {};
 const waiting = {};
-// which rater sorts the list: "maxooma" (scores stored in the database) or "rater2"
-// (scored here in the browser, per case, the first time the case is shown)
+// which rater sorts the list: "maxooma" (scores stored in the database), or "rater2" /
+// "rater3" (scored here in the browser, per case, the first time the case is shown).
+// Rater 3 is the Rater 2 engine with numbers trained on EG2 and NS main algs only.
+const RATER3_COSTS = {"rR":60,"bB":75,"small":20,"big":60,"rotation":0,"rideRare":0,"rotRegrip":0,"rotAfterLeft":0,"leftAfterRot":0,"rotAgain":0,"rotBack":0,"secondRotation":120,"opposite":0,"sameKind":10,"sameKindEnd":0,"dot":0,"lift":0,"ring":0,"thumbB":0,"lateRegrip":0,"loneLast":0,"doubleTurn":0,"rprp":20,"insert":120,"bonus":0,"backStart":0};
+const EXEC_RATERS = {rater2: {label: "Rater 2", costs: undefined}, rater3: {label: "Rater 3", costs: RATER3_COSTS}};
 let rater = "maxooma";
-try { if (localStorage.getItem("cf-rater") === "rater2") rater = "rater2"; } catch (e) {}
-const cache2 = {};
+try { const saved = localStorage.getItem("cf-rater"); if (EXEC_RATERS[saved]) rater = saved; } catch (e) {}
+const cache2 = {};   // rater + ":" + case -> rated list
 let job = 0;
 // angle number after an algorithm is renamed by one z (exported from the model:
 // rotation h -> z * h), used when Rater 2 writes an algorithm from another angle
 const ZANGLE = [10,6,18,14,9,22,19,4,13,23,7,3,17,24,11,2,5,21,15,1,12,16,20,8];
 const ZTIMES = {"": 0, "z": 1, "z2": 2, "z'": 3};
-function rate2(e){
-  const r = RATER2.rate(e.alg.split(" "));
+function rate2(e, costs){
+  const r = RATER2.rate(e.alg.split(" "), costs);
   const angle = e.angle.split("/").map(a => { let x = +a; for (let k = 0; k < ZTIMES[r.angle]; k++) x = ZANGLE[x - 1]; return x; })
     .sort((a, b) => a - b).join("/");
   return {units: r.units, score: r.score.toFixed(2), moves: e.moves, angle: angle, alg: r.written, exec: r.execution};
 }
-// scores a case's list with Rater 2 in small batches so the page stays responsive
+// scores a case's list with Rater 2 or 3 in small batches so the page stays responsive
 function withRater2(key, list, done){
   if (cache2[key]) return done();
-  const mine = ++job, out = [];
+  const mine = ++job, out = [], which = EXEC_RATERS[key.split(":")[0]];
   (function batch(){
     if (mine !== job) return;
     const end = Math.min(list.length, out.length + 120);
-    for (let i = out.length; i < end; i++) out.push(rate2(list[i]));
+    for (let i = out.length; i < end; i++) out.push(rate2(list[i], which.costs));
     if (out.length < list.length){
       $("msg").hidden = false; $("rows").textContent = "";
-      $("msg").textContent = "Rating with Rater 2… " + out.length.toLocaleString("en") + " of " + list.length.toLocaleString("en");
+      $("msg").textContent = "Rating with " + which.label + "… " + out.length.toLocaleString("en") + " of " + list.length.toLocaleString("en");
       setTimeout(batch, 0);
     } else { cache2[key] = out; done(); }
   })();
@@ -267,16 +270,16 @@ function load(letter, n, done){
 function showMsg(t){ $("rows").textContent = ""; $("msg").hidden = false; $("msg").textContent = t; $("count").textContent = ""; $("chips").textContent = ""; }
 function renderRaters(){
   document.querySelectorAll("#raters button").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === rater));
-  $("execopt").hidden = rater !== "rater2";
+  $("execopt").hidden = !EXEC_RATERS[rater];
 }
 function renderTable(){
   const key = state.letter + caseIndex(state.ori), base = cache[key];
   if (!base) return;
   renderRaters();
-  if (rater === "rater2" && !cache2[key]) return withRater2(key, base, () => { if (key === state.letter + caseIndex(state.ori)) renderTable(); });
-  const r2 = rater === "rater2";
-  // Rater 2: lower score is better; ties by fewer moves, then the database order
-  const list = r2 ? cache2[key].map((e, i) => [e, i]).sort((a, b) => a[0].units - b[0].units || a[0].moves - b[0].moves || a[1] - b[1]).map(x => x[0]) : base;
+  const r2 = !!EXEC_RATERS[rater], key2 = rater + ":" + key, rname = r2 ? EXEC_RATERS[rater].label : "";
+  if (r2 && !cache2[key2]) return withRater2(key2, base, () => { if (key === state.letter + caseIndex(state.ori)) renderTable(); });
+  // Rater 2 / 3: lower score is better; ties by fewer moves, then the database order
+  const list = r2 ? cache2[key2].map((e, i) => [e, i]).sort((a, b) => a[0].units - b[0].units || a[0].moves - b[0].moves || a[1] - b[1]).map(x => x[0]) : base;
   const lens = [...new Set(list.map(e => e.moves))].sort((a,b)=>a-b);
   const chips = $("chips"); chips.textContent = "";
   const lab = document.createElement("span"); lab.textContent = "Max moves"; chips.append(lab);
@@ -289,12 +292,12 @@ function renderTable(){
   }
   const shown = list.filter(e => e.moves <= state.max);
   const showExec = r2 && $("showexec").checked;
-  $("h-score").textContent = r2 ? "Rater 2" : "Rater score";
+  $("h-score").textContent = r2 ? rname : "Rater score";
   $("h-score").title = r2 ? "Effective move count: lower is better" : "Maxooma rater: higher is better";
   $("h-exec").hidden = !showExec;
   $("count").textContent = shown.length.toLocaleString("en") + " of " + list.length.toLocaleString("en") +
     " algorithms" + (state.max < 11 ? " (" + state.max + " moves or fewer)" : "") + ", best rated first" +
-    (r2 ? " by Rater 2 (effective move count, lower is better)" : "");
+    (r2 ? " by " + rname + " (effective move count, lower is better)" : "");
   const body = $("rows"); body.textContent = "";
   $("msg").hidden = shown.length > 0;
   if (!shown.length) $("msg").textContent = "No algorithm of " + state.max + " moves or fewer for this case.";
