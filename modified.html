@@ -115,9 +115,10 @@ svg{display:block;height:auto}
 .typed input{font:600 34px var(--mono);width:7.5em;text-align:center;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink)}
 .typed button{padding:10px 16px;font-size:15px}
 .typed input.bad{border-color:#d33}
-.mode{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:10px}
-.mode span{font-size:12px;color:var(--muted)}
-.mode button{padding:4px 10px;font-size:13px}
+.train{position:relative}
+.mode{position:absolute;top:10px;left:10px;display:flex;gap:4px}
+.mode button{padding:2px 8px;font-size:11.5px}
+@media (max-width:820px){.mode{position:static;margin-bottom:6px}}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);padding:0;width:min(1120px,96vw);max-height:92vh}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 .dhead{position:sticky;top:0;z-index:2;background:var(--bg);display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
@@ -147,12 +148,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 </header>
 <main>
   <section class="panel train">
+    <div class="mode" id="mode"></div>
     <div class="progress" id="progress"></div>
     <div class="scramble" id="scramble"></div>
     <button class="timer" id="timer" aria-label="Timer. Press space or tap to start and stop.">0.00</button>
     <form class="typed" id="typed" hidden><input id="typedtime" inputmode="decimal" autocomplete="off" placeholder="12.34" aria-label="Your time, for example 12.34 or 1:02.34"><button type="submit">Add time</button></form>
     <p class="hint" id="hint"></p>
-    <div class="mode" id="mode"><span>Times</span></div>
     <div class="actions">
       <button class="gear" id="gear" title="Choose CF cases, layers and layer solutions">&#9881; Settings</button>
       <button id="next">Next scramble</button>
@@ -328,8 +329,8 @@ $("typed").onsubmit = e => {
 };
 function renderMode(){
   const box = $("mode");
-  while (box.children.length > 1) box.lastChild.remove();
-  for (const [val, text] of [[false, "Use the timer"], [true, "Type them in"]])
+  box.textContent = "";
+  for (const [val, text] of [[false, "Timer"], [true, "Typing"]])
     box.append(button(text, typedMode === val, () => { if (running || typedMode === val) return; typedMode = val; save(); renderMode(); if (val) $("typedtime").focus(); }));
   $("timer").hidden = typedMode; $("typed").hidden = !typedMode;
   $("hint").textContent = (typedMode ? "Type your time (12.34 or 1:02.34) and press Enter. " : "Space starts and stops the timer (or tap the time). ") +
