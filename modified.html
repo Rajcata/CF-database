@@ -110,7 +110,14 @@ svg{display:block;height:auto}
 .reveal .what{font:600 19px var(--mono)}
 .reveal .sub{color:var(--muted);font-size:13px;margin:2px 0 8px}
 .lnet polygon{stroke:var(--panel);stroke-width:2;stroke-linejoin:round}
-.gear{padding:5px 12px;font-size:14px}
+.actions .gear{padding:9px 20px;font-size:17px;font-weight:600}
+.typed{display:flex;gap:8px;justify-content:center;align-items:center;margin:18px 0 10px}
+.typed input{font:600 34px var(--mono);width:7.5em;text-align:center;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink)}
+.typed button{padding:10px 16px;font-size:15px}
+.typed input.bad{border-color:#d33}
+.mode{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:10px}
+.mode span{font-size:12px;color:var(--muted)}
+.mode button{padding:4px 10px;font-size:13px}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);padding:0;width:min(1120px,96vw);max-height:92vh}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 .dhead{position:sticky;top:0;z-index:2;background:var(--bg);display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
@@ -120,29 +127,32 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .layerbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .layerbar button{padding:3px 10px;font-size:13px}
 .layerbar span{color:var(--muted);font-size:13px;margin-right:auto}
-.layers{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.layers{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+@media (max-width:700px){.layers{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .layer{border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--panel);display:grid;gap:6px;align-content:start}
-.layer.off{opacity:.55}
+.layer.off .sols{opacity:.5}
 .layer .lt{padding:4px 0;font-weight:600;font-size:13px}
 .layer svg{width:100%;max-width:150px;margin:0 auto}
 .sols{display:grid;gap:2px;max-height:150px;overflow-y:auto}
-.sols label{display:flex;gap:6px;align-items:center;font:500 13px var(--mono);cursor:pointer;white-space:nowrap}
+.sols label{display:flex;gap:5px;align-items:center;font:500 12.5px var(--mono);cursor:pointer;white-space:nowrap}
 .sols small{font:400 11px system-ui,sans-serif;color:var(--muted)}
-.sols .none{font:400 12px system-ui,sans-serif;color:var(--muted)}
+.sols .none{font:500 13px system-ui,sans-serif;color:var(--muted);text-align:center}
 </style>
 </head>
 <body>
 <header>
   <h1>CF modified scrambles</h1>
   <p>Skewb, centers first. Scrambles that lead to the CF cases you choose, after the layer you choose.</p>
-  <nav><a href="index.html">Database</a><a href="trainer.html">Trainer</a><a href="simulator.html">Simulator</a><a href="modified.html" aria-current="page">Modified Scrambles</a></nav>
+  <nav><a href="index.html">Database</a><a href="trainer.html">Trainer</a><a href="modified.html" aria-current="page">Modified Scrambles</a><a href="simulator.html">Simulator</a></nav>
 </header>
 <main>
   <section class="panel train">
     <div class="progress" id="progress"></div>
     <div class="scramble" id="scramble"></div>
     <button class="timer" id="timer" aria-label="Timer. Press space or tap to start and stop.">0.00</button>
-    <p class="hint">Space starts and stops the timer (or tap the time). Scrambles are 11 moves in U L R B, from white on top and green front-left; the layer can show up from any angle.</p>
+    <form class="typed" id="typed" hidden><input id="typedtime" inputmode="decimal" autocomplete="off" placeholder="12.34" aria-label="Your time, for example 12.34 or 1:02.34"><button type="submit">Add time</button></form>
+    <p class="hint" id="hint"></p>
+    <div class="mode" id="mode"><span>Times</span></div>
     <div class="actions">
       <button class="gear" id="gear" title="Choose CF cases, layers and layer solutions">&#9881; Settings</button>
       <button id="next">Next scramble</button>
@@ -191,7 +201,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   <div class="dbody" id="pane-layers" hidden>
     <section class="panel">
       <h2>Layers you want to get, and the solution you will do</h2>
-      <div class="layerbar"><span id="layercount"></span><button id="l-all">All layers</button><button id="l-none">None</button><button id="l-sheet">Reset solutions to the sheet's first</button></div>
+      <div class="layerbar"><span id="layercount"></span><button id="l-all">All layers</button><button id="l-none">None</button><button id="l-sheet">Reset solutions to the first listed</button></div>
       <div class="layers" id="layers"></div>
       <p class="hint">Pictures as in the CF layers sheet: white on the bottom, green front-left (the last six: green on top, blue front-left). Angle numbers count from that holding. The scramble is built so that the ticked solution leads to one of your CF cases.</p>
     </section>
@@ -200,7 +210,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 <script src="trainer_data.js?v=1"></script>
 <script src="trainer_core.js?v=1"></script>
-<script src="mod_data.js?v=1"></script>
+<script src="mod_data.js?v=2"></script>
 <script src="mod_core.js?v=1"></script>
 <script>
 "use strict";
@@ -219,13 +229,14 @@ const PAINT = {W:"#ffffff",Y:"#f2d21c",G:"#2aa84a",B:"#2b5fd9",R:"#e0352b",O:"#f
 const DIGIT = ["0","+","−"];
 const svgNS = "http://www.w3.org/2000/svg";
 const $ = id => document.getElementById(id);
-const STORE = "cf-modified-v1";
+const STORE = "cf-modified-v2";
 const LAYERS = CFM.layers, NL = LAYERS.length;
 
 // ---------- state ----------
 const sel = {};                       // letter -> Uint8Array(729), 1 = selected
 for (const l of LETTERS) sel[l] = new Uint8Array(729);
-const layerOn = new Uint8Array(NL).fill(1);     // which layers may come
+const layerOn = new Uint8Array(NL);             // which layers may come (none at first)
+let typedMode = false;                // true: times are typed in, the timer is not used
 const pick = new Uint8Array(NL);                // index of the solution the user will do
 let solves = [];                      // {t: milliseconds, l: letter, n: column, li: layer}
 let cur = null;                       // {l, n, li, si, scr}
@@ -237,16 +248,17 @@ function usable(l, n){ return !(l === "O" && n === 0); }       // O (00)(00)(00)
 function total(l){ return l === "O" ? 728 : 729; }
 function count(l){ let c = 0; const a = sel[l]; for (let i = 0; i < 729; i++) c += a[i]; return c; }
 function selected(){ const out = []; for (const l of LETTERS){ const a = sel[l]; for (let n = 0; n < 729; n++) if (a[n]) out.push([l, n]); } return out; }
-function layersOn(){ const out = []; for (let i = 0; i < NL; i++) if (layerOn[i]) out.push(i); return out; }
+function layersOn(){ const out = []; for (let i = 0; i < NL; i++) if (layerOn[i] && offered(i)) out.push(i); return out; }
 function oriOf(n){ const o = []; for (let i = 5; i >= 0; i--){ o[i] = n % 3; n = Math.floor(n / 3); } return o; }
 function caseName(n){ const o = oriOf(n); return "("+DIGIT[o[0]]+DIGIT[o[1]]+") ("+DIGIT[o[2]]+DIGIT[o[3]]+") ("+DIGIT[o[4]]+DIGIT[o[5]]+")"; }
-function solText(li, si){ return LAYERS[li].sols[si].text || "already solved"; }
+function solText(li, si){ return LAYERS[li].sols[si].text || "Solved"; }
+function offered(i){ return !LAYERS[i].off; }
 
 function save(){
   try {
     const s = {}; for (const l of LETTERS) s[l] = Array.from(sel[l]).join("");
     localStorage.setItem(STORE, JSON.stringify({sel:s, layers:Array.from(layerOn).join(""),
-      pick:LAYERS.map((L, i) => L.sols[pick[i]].text), solves:solves}));
+      pick:LAYERS.map((L, i) => L.sols[pick[i]].text), typed:typedMode, solves:solves}));
   } catch (e) {}
 }
 function restore(){
@@ -256,7 +268,8 @@ function restore(){
     if (d){
       for (const l of LETTERS) if (d.sel && typeof d.sel[l] === "string" && d.sel[l].length === 729)
         for (let n = 0; n < 729; n++) sel[l][n] = d.sel[l][n] === "1" && usable(l, n) ? 1 : 0;
-      if (typeof d.layers === "string" && d.layers.length === NL) for (let i = 0; i < NL; i++) layerOn[i] = d.layers[i] === "1" ? 1 : 0;
+      if (typeof d.layers === "string" && d.layers.length === NL) for (let i = 0; i < NL; i++) layerOn[i] = d.layers[i] === "1" && offered(i) ? 1 : 0;
+      typedMode = !!d.typed;
       if (Array.isArray(d.pick)) for (let i = 0; i < NL; i++){            // remembered by its text, so new data cannot shift it
         const k = LAYERS[i].sols.findIndex(s => s.text === d.pick[i]); pick[i] = k < 0 ? 0 : k;
       }
@@ -264,7 +277,7 @@ function restore(){
       ok = true;
     }
   } catch (e) {}
-  if (!ok) sel.A.fill(1);            // first visit: set A, every layer, the sheet's first solution
+  if (!ok) sel.A.fill(1);            // first visit: set A, no layer yet, the first listed solution
 }
 
 // ---------- the scramble ----------
@@ -295,18 +308,41 @@ function toggleTimer(){
     running = false; cancelAnimationFrame(raf);
     shown = performance.now() - t0;
     $("timer").classList.remove("on"); $("timer").textContent = fmt(shown);
-    solves.push({t: Math.round(shown), l: cur.l, n: cur.n, li: cur.li});
-    save(); renderSession(); next();
+    record(shown);
   }
+}
+function record(ms){ solves.push({t: Math.round(ms), l: cur.l, n: cur.n, li: cur.li}); save(); renderSession(); next(); }
+// "12.34", "1:02.34" or "1:02" -> milliseconds (null if it is not a time)
+function parseTime(text){
+  const m = /^\s*(?:(\d+):)?(\d+)(?:[.,](\d{1,3}))?\s*$/.exec(text);
+  if (!m) return null;
+  const ms = ((+(m[1] || 0)) * 60 + (+m[2])) * 1000 + (m[3] ? Math.round(+("0." + m[3]) * 1000) : 0);
+  return ms > 0 ? ms : null;
+}
+$("typed").onsubmit = e => {
+  e.preventDefault();
+  const box = $("typedtime"), ms = parseTime(box.value);
+  box.classList.toggle("bad", ms === null || !cur);
+  if (ms === null || !cur) return;
+  box.value = ""; record(ms); box.focus();
+};
+function renderMode(){
+  const box = $("mode");
+  while (box.children.length > 1) box.lastChild.remove();
+  for (const [val, text] of [[false, "Use the timer"], [true, "Type them in"]])
+    box.append(button(text, typedMode === val, () => { if (running || typedMode === val) return; typedMode = val; save(); renderMode(); if (val) $("typedtime").focus(); }));
+  $("timer").hidden = typedMode; $("typed").hidden = !typedMode;
+  $("hint").textContent = (typedMode ? "Type your time (12.34 or 1:02.34) and press Enter. " : "Space starts and stops the timer (or tap the time). ") +
+    "Scrambles are 11 moves in U L R B, from white on top and green front-left; the layer can show up from any angle.";
 }
 document.addEventListener("keydown", e => {
   if (e.code !== "Space" && e.key !== " ") return;
-  if ($("settings").open) return;
+  if ($("settings").open || typedMode) return;
   e.preventDefault();
   if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
   if (!e.repeat) toggleTimer();
 });
-document.addEventListener("keyup", e => { if ((e.code === "Space" || e.key === " ") && !$("settings").open) e.preventDefault(); });
+document.addEventListener("keyup", e => { if ((e.code === "Space" || e.key === " ") && !$("settings").open && !typedMode) e.preventDefault(); });
 $("timer").onclick = toggleTimer;
 $("next").onclick = () => { if (!running) next(); };
 $("show").onclick = () => { if (cur){ revealed = !revealed; render(); } };
@@ -354,6 +390,7 @@ function render(){
   drawLayer($("curnet"), L);
   $("rv-layer").textContent = "Layer " + (cur.li + 1) + ": " + solText(cur.li, cur.si);
   $("rv-layersub").textContent = L.sols[cur.si].text ? "Angle counted from the picture: " + holdingText(L) + "." : "The centres are solved straight away.";
+  if (!L.sols[cur.si].text) $("rv-layer").textContent = "Layer " + (cur.li + 1) + ": solved";
   const rc = $("rv-case"); rc.textContent = "";
   const a = document.createElement("a");
   a.href = "index.html#" + cur.l + oriOf(cur.n).join(""); a.target = "_blank"; a.rel = "noopener";
@@ -459,27 +496,28 @@ function changed(fromPicker){
 // ---------- settings: layers ----------
 function renderLayers(){
   const box = $("layers"); box.textContent = "";
-  $("layercount").textContent = layersOn().length + " of " + NL + " layers selected";
+  $("layercount").textContent = layersOn().length + " of " + LAYERS.filter((L, i) => offered(i)).length + " layers selected";
   LAYERS.forEach((L, i) => {
-    const card = document.createElement("div"); card.className = "layer" + (layerOn[i] ? "" : " off");
-    const tog = button("Layer " + (i + 1), !!layerOn[i], () => { layerOn[i] = layerOn[i] ? 0 : 1; dirty = true; save(); renderLayers(); });
-    tog.className = "lt"; tog.title = layerOn[i] ? "This layer can come. Click to leave it out." : "Left out. Click to include this layer.";
+    const can = offered(i), on = can && !!layerOn[i];
+    const card = document.createElement("div"); card.className = "layer" + (on ? "" : " off");
+    const tog = button("Layer " + (i + 1), on, () => { layerOn[i] = layerOn[i] ? 0 : 1; dirty = true; save(); renderLayers(); });
+    tog.className = "lt"; tog.disabled = !can;
+    tog.title = !can ? "This layer is not offered." : on ? "This layer can come. Click to leave it out." : "Left out. Click to include this layer.";
     const svg = el("svg", {viewBox:"10 37 520 460", role:"img", "aria-label":"Layer " + (i + 1)}); svg.classList.add("lnet");
     drawLayer(svg, L);
     const sols = document.createElement("div"); sols.className = "sols";
-    if (!L.sols[0].text){ const d = document.createElement("div"); d.className = "none"; d.textContent = "Centres already solved."; sols.append(d); }
+    if (!can || !L.sols[0].text){ const d = document.createElement("div"); d.className = "none"; d.textContent = can ? "Solved" : "No"; sols.append(d); }
     else L.sols.forEach((s, k) => {
       const lab = document.createElement("label"), r = document.createElement("input");
       r.type = "radio"; r.name = "sol" + i; r.checked = pick[i] === k;
       r.onchange = () => { pick[i] = k; dirty = true; save(); };
       lab.append(r, s.text);
-      if (s.sheet){ const sm = document.createElement("small"); sm.textContent = "sheet"; lab.append(sm); }
       sols.append(lab);
     });
     card.append(tog, svg, sols); box.append(card);
   });
 }
-$("l-all").onclick = () => { layerOn.fill(1); dirty = true; save(); renderLayers(); };
+$("l-all").onclick = () => { for (let i = 0; i < NL; i++) layerOn[i] = offered(i) ? 1 : 0; dirty = true; save(); renderLayers(); };
 $("l-none").onclick = () => { layerOn.fill(0); dirty = true; save(); renderLayers(); };
 $("l-sheet").onclick = () => { pick.fill(0); dirty = true; save(); renderLayers(); };
 
@@ -490,10 +528,12 @@ function showTab(which){
 $("tab-cases").onclick = () => showTab("cases");
 $("tab-layers").onclick = () => showTab("layers");
 $("gear").onclick = () => { if (running) return; renderSets(); renderPicker(); renderLayers(); $("settings").showModal(); };
-$("close").onclick = () => $("settings").close();
-$("settings").addEventListener("close", () => { if (dirty) next(); else render(); });
+function afterSettings(){ if (dirty) next(); else render(); }
+$("close").onclick = () => { $("settings").close(); afterSettings(); };
+$("settings").addEventListener("close", afterSettings);          // also when closed with Esc
 
 restore();
+renderMode();
 renderSession();
 next();
 </script>
