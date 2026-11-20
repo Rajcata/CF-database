@@ -190,6 +190,13 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <button id="tab-layers" aria-pressed="false">Layers</button>
     <button id="close">Done</button>
   </div>
+  <div class="dbody" style="padding-bottom:0">
+    <section class="panel">
+      <h2>Order</h2>
+      <div class="opt" id="opt-once"></div>
+      <p class="hint">Off: every scramble takes a random case and a random layer. On: the selected ones come one by one, each once, in random order. With both on, the run lasts until the longer list is through; the shorter one starts over.</p>
+    </section>
+  </div>
   <div class="dbody" id="pane-cases">
     <section class="panel">
       <h2>CF cases you want to get</h2>
@@ -236,6 +243,8 @@ const LAYERS = CFM.layers, NL = LAYERS.length;
 const sel = {};                       // letter -> Uint8Array(729), 1 = selected
 for (const l of LETTERS) sel[l] = new Uint8Array(729);
 const layerOn = new Uint8Array(NL);             // which layers may come (none at first)
+let once = {cases:false, layers:false};   // go through the selected cases / layers one by one
+let qC = [], qL = [], done = 0, runLen = 0, finished = false;
 let typedMode = false;                // true: times are typed in, the timer is not used
 const pick = new Uint8Array(NL);                // index of the solution the user will do
 let solves = [];                      // {t: milliseconds, l: letter, n: column, li: layer}
@@ -258,7 +267,7 @@ function save(){
   try {
     const s = {}; for (const l of LETTERS) s[l] = Array.from(sel[l]).join("");
     localStorage.setItem(STORE, JSON.stringify({sel:s, layers:Array.from(layerOn).join(""),
-      pick:LAYERS.map((L, i) => L.sols[pick[i]].text), typed:typedMode, solves:solves}));
+      pick:LAYERS.map((L, i) => L.sols[pick[i]].text), typed:typedMode, once:once, solves:solves}));
   } catch (e) {}
 }
 function restore(){
@@ -270,6 +279,7 @@ function restore(){
         for (let n = 0; n < 729; n++) sel[l][n] = d.sel[l][n] === "1" && usable(l, n) ? 1 : 0;
       if (typeof d.layers === "string" && d.layers.length === NL) for (let i = 0; i < NL; i++) layerOn[i] = d.layers[i] === "1" && offered(i) ? 1 : 0;
       typedMode = !!d.typed;
+      if (d.once) once = {cases: !!d.once.cases, layers: !!d.once.layers};
       if (Array.isArray(d.pick)) for (let i = 0; i < NL; i++){            // remembered by its text, so new data cannot shift it
         const k = LAYERS[i].sols.findIndex(s => s.text === d.pick[i]); pick[i] = k < 0 ? 0 : k;
       }
@@ -281,16 +291,28 @@ function restore(){
 }
 
 // ---------- the scramble ----------
+function shuffle(a){ for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// a new run: called at the start and whenever the settings changed
+function startRun(){
+  qC = once.cases ? shuffle(selected()) : []; qL = once.layers ? shuffle(layersOn()) : [];
+  done = 0; finished = false; dirty = false;
+  runLen = Math.max(qC.length, qL.length);
+  next();
+}
+// the scramble for the current place in the run (a fresh one each time it is called)
 function next(){
   const cs = selected(), ls = layersOn();
-  revealed = false; dirty = false;
-  if (!cs.length || !ls.length){ cur = null; render(); return; }
-  for (let tries = 0; tries < 20; tries++){
-    const c = cs[Math.floor(Math.random() * cs.length)], li = ls[Math.floor(Math.random() * ls.length)];
+  revealed = false;
+  cur = null;
+  if (!cs.length || !ls.length){ render(); return; }
+  if ((once.cases || once.layers) && done >= runLen){ finished = true; render(); return; }
+  for (let tries = 0; tries < 20 && !cur; tries++){
+    const c = once.cases ? qC[done % qC.length] : cs[Math.floor(Math.random() * cs.length)];
+    const li = once.layers ? qL[done % qL.length] : ls[Math.floor(Math.random() * ls.length)];
     const m = CFM.make(c[0], c[1], li, pick[li]);
-    if (m){ cur = {l:c[0], n:c[1], li:li, si:pick[li], scr:m.scramble}; render(); return; }
+    if (m) cur = {l:c[0], n:c[1], li:li, si:pick[li], scr:m.scramble};
   }
-  cur = null; render();
+  render();
 }
 
 // ---------- timer ----------
@@ -311,7 +333,7 @@ function toggleTimer(){
     record(shown);
   }
 }
-function record(ms){ solves.push({t: Math.round(ms), l: cur.l, n: cur.n, li: cur.li}); save(); renderSession(); next(); }
+function record(ms){ solves.push({t: Math.round(ms), l: cur.l, n: cur.n, li: cur.li}); save(); renderSession(); done++; next(); }
 // like csTimer's typing input: plain digits are read from the right as hundredths, seconds,
 // minutes ("1234" = 12.34, "10234" = 1:02.34); "12.34", "9,5" and "1:02.34" work too
 function parseTime(text){
@@ -383,9 +405,15 @@ function holdingText(L){ return L.pic[0] === "G" ? "green on top, blue front-lef
 function render(){
   const nC = selected().length, nL = layersOn().length, scr = $("scramble");
   scr.classList.toggle("note", !cur);
-  scr.textContent = cur ? cur.scr : !nC ? "Open Settings and choose some CF cases." : !nL ? "Open Settings and choose some layers." : "No scramble found; try Next scramble.";
-  $("progress").textContent = nC.toLocaleString("en") + (nC === 1 ? " CF case" : " CF cases") + " · " + nL + (nL === 1 ? " layer" : " layers") + " selected";
-  $("next").disabled = !nC || !nL;
+  const run = once.cases || once.layers;
+  scr.textContent = cur ? cur.scr : !nC ? "Open Settings and choose some CF cases." : !nL ? "Open Settings and choose some layers." : finished ? "" : "No scramble found; try Next scramble.";
+  if (!cur && finished){
+    scr.append("All " + runLen + " done. ", button("Go again", null, startRun));
+    scr.lastChild.style.padding = "4px 12px";
+  }
+  $("progress").textContent = nC.toLocaleString("en") + (nC === 1 ? " CF case" : " CF cases") + " · " + nL + (nL === 1 ? " layer" : " layers") + " selected" +
+    (run && nC && nL ? " · " + (once.cases && once.layers ? "each case and layer once" : once.cases ? "each case once" : "each layer once") + " · " + (finished ? "finished" : (done + 1) + " of " + runLen) : "");
+  $("next").disabled = !cur;
   $("show").disabled = !cur;
   $("show").textContent = revealed ? "Hide layer and case" : "Show layer and case";
   $("reveal").hidden = !(cur && revealed);
@@ -525,21 +553,26 @@ $("l-all").onclick = () => { for (let i = 0; i < NL; i++) layerOn[i] = offered(i
 $("l-none").onclick = () => { layerOn.fill(0); dirty = true; save(); renderLayers(); };
 $("l-sheet").onclick = () => { pick.fill(0); dirty = true; save(); renderLayers(); };
 
+function renderOnce(){
+  const box = $("opt-once"); box.textContent = "";
+  for (const [key, text] of [["cases", "Each selected CF case once"], ["layers", "Each selected layer once"]])
+    box.append(button(text, once[key], () => { once[key] = !once[key]; dirty = true; save(); renderOnce(); }));
+}
 function showTab(which){
   $("pane-cases").hidden = which !== "cases"; $("pane-layers").hidden = which !== "layers";
   $("tab-cases").setAttribute("aria-pressed", which === "cases"); $("tab-layers").setAttribute("aria-pressed", which === "layers");
 }
 $("tab-cases").onclick = () => showTab("cases");
 $("tab-layers").onclick = () => showTab("layers");
-$("gear").onclick = () => { if (running) return; renderSets(); renderPicker(); renderLayers(); $("settings").showModal(); };
-function afterSettings(){ if (dirty) next(); else render(); }
+$("gear").onclick = () => { if (running) return; renderOnce(); renderSets(); renderPicker(); renderLayers(); $("settings").showModal(); };
+function afterSettings(){ if (dirty) startRun(); else render(); }
 $("close").onclick = () => { $("settings").close(); afterSettings(); };
 $("settings").addEventListener("close", afterSettings);          // also when closed with Esc
 
 restore();
 renderMode();
 renderSession();
-next();
+startRun();
 </script>
 </body>
 </html>
