@@ -111,9 +111,9 @@ svg{display:block;height:auto}
 .reveal .sub{color:var(--muted);font-size:13px;margin:2px 0 8px}
 .lnet polygon{stroke:var(--panel);stroke-width:2;stroke-linejoin:round}
 .actions .gear{padding:9px 20px;font-size:17px;font-weight:600}
-.typed{display:flex;gap:8px;justify-content:center;align-items:center;margin:18px 0 10px}
-.typed input{font:600 34px var(--mono);width:7.5em;text-align:center;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink)}
-.typed button{padding:10px 16px;font-size:15px}
+.typed{display:flex;justify-content:center;margin:14px 0 10px}
+.typed input{font:600 clamp(44px,9vw,84px)/1.1 var(--mono);font-variant-numeric:tabular-nums;width:min(100%,6.2em);text-align:center;padding:4px 8px;border:2px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.typed input:focus{outline:none;border-color:var(--accent)}
 .typed input.bad{border-color:#d33}
 .train{position:relative}
 .mode{position:absolute;top:10px;left:10px;display:flex;gap:4px}
@@ -152,7 +152,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="progress" id="progress"></div>
     <div class="scramble" id="scramble"></div>
     <button class="timer" id="timer" aria-label="Timer. Press space or tap to start and stop.">0.00</button>
-    <form class="typed" id="typed" hidden><input id="typedtime" inputmode="decimal" autocomplete="off" placeholder="12.34" aria-label="Your time, for example 12.34 or 1:02.34"><button type="submit">Add time</button></form>
+    <form class="typed" id="typed" hidden><input id="typedtime" inputmode="decimal" autocomplete="off" aria-label="Type your time and press Enter"></form>
     <p class="hint" id="hint"></p>
     <div class="actions">
       <button class="gear" id="gear" title="Choose CF cases, layers and layer solutions">&#9881; Settings</button>
@@ -313,11 +313,17 @@ function toggleTimer(){
   }
 }
 function record(ms){ solves.push({t: Math.round(ms), l: cur.l, n: cur.n, li: cur.li}); save(); renderSession(); next(); }
-// "12.34", "1:02.34" or "1:02" -> milliseconds (null if it is not a time)
+// like csTimer's typing input: plain digits are read from the right as hundredths, seconds,
+// minutes ("1234" = 12.34, "10234" = 1:02.34); "12.34", "9,5" and "1:02.34" work too
 function parseTime(text){
-  const m = /^\s*(?:(\d+):)?(\d+)(?:[.,](\d{1,3}))?\s*$/.exec(text);
-  if (!m) return null;
-  const ms = ((+(m[1] || 0)) * 60 + (+m[2])) * 1000 + (m[3] ? Math.round(+("0." + m[3]) * 1000) : 0);
+  text = text.trim();
+  let ms = null, m;
+  if (/^\d+$/.test(text)){
+    const n = +text, cs = n % 100, sec = Math.floor(n / 100) % 100, min = Math.floor(n / 10000);
+    ms = (min * 60 + sec) * 1000 + cs * 10;
+  } else if ((m = /^(?:(\d+):)?(\d*)(?:[.,](\d{1,3}))?$/.exec(text)) && (m[2] || m[3])){
+    ms = ((+(m[1] || 0)) * 60 + (+(m[2] || 0))) * 1000 + (m[3] ? Math.round(+("0." + m[3]) * 1000) : 0);
+  }
   return ms > 0 ? ms : null;
 }
 $("typed").onsubmit = e => {
@@ -333,7 +339,7 @@ function renderMode(){
   for (const [val, text] of [[false, "Timer"], [true, "Typing"]])
     box.append(button(text, typedMode === val, () => { if (running || typedMode === val) return; typedMode = val; save(); renderMode(); if (val) $("typedtime").focus(); }));
   $("timer").hidden = typedMode; $("typed").hidden = !typedMode;
-  $("hint").textContent = (typedMode ? "Type your time (12.34 or 1:02.34) and press Enter. " : "Space starts and stops the timer (or tap the time). ") +
+  $("hint").textContent = (typedMode ? "Type your time and press Enter (1234 = 12.34). " : "Space starts and stops the timer (or tap the time). ") +
     "Scrambles are 11 moves in U L R B, from white on top and green front-left; the layer can show up from any angle.";
 }
 document.addEventListener("keydown", e => {
