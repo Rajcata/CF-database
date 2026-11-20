@@ -57,5 +57,36 @@ var CFM = (function(){
     return null;
   }
 
-  return {make: make, beforeLayer: beforeLayer, scrambleFrame: scrambleFrame, layers: D.layers};
+  /* Permutation recognition after the layer, in the holding the layer solution was done
+     in (the picture's holding turned by the solution's angle number; for the solved layer
+     the picture's holding): the pattern name of the patterns tab (corners 1-4 = DL UL UF
+     DF) and every sticker location that can be brought to location 4 to see the subset's
+     picture. */
+  function recog(letter, n, li, si, angle){
+    var sol = D.layers[li].sols[si], y = beforeLayer(letter, n, li, si, angle), i, g, k;
+    if (sol.text){
+      var parts = sol.text.split(" "), num = +parts[0];
+      for (g = 0; g < 24; g++) if (D.loc[ROTS[g].indexOf(0)] === num) break;     // brings location num to location 3
+      y = applyWord(rotateOnly(y, ROTS[g]), parts.slice(1));
+    }
+    // rename the stickers so that the centres count as home in this holding
+    var h = null;
+    for (g = 0; g < 24 && !h; g++){
+      var ok = true;
+      for (i = 24; i < 30 && ok; i++) if (ROTS[g][y[i]] !== i) ok = false;
+      if (ok) h = ROTS[g];
+    }
+    var K = y.map(function(x){ return h[x]; });
+    var name = D.pattern.corners.map(function(c){ return D.pattern.letters[c][Math.floor(K[3 * c] / 3)]; });
+    var want = CFT.caseState(letter, 0), locs = [];
+    for (g = 0; g < 24; g++){
+      var t = rehold(K, ROTS[g]), same = true;
+      for (k = 0; k < 8 && same; k++) if (Math.floor(t[3 * k] / 3) !== Math.floor(want[3 * k] / 3)) same = false;
+      if (same) locs.push(D.loc[ROTS[g].indexOf(6)]);                           // the spot that comes to location 4
+    }
+    locs.sort(function(a, b){ return a - b; });
+    return {pattern: name[0] + "-" + name[1] + " / " + name[2] + "-" + name[3], locs: locs};
+  }
+
+  return {make: make, recog: recog, beforeLayer: beforeLayer, scrambleFrame: scrambleFrame, layers: D.layers};
 })();

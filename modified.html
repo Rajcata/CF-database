@@ -165,6 +165,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         <div class="sub" id="rv-layersub"></div>
         <div class="what" id="rv-case"></div>
         <div class="sub" id="rv-casesub"></div>
+        <div class="what" id="rv-pattern"></div>
+        <div class="sub" id="rv-patternsub"></div>
       </div>
     </div>
   </section>
@@ -217,8 +219,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 <script src="trainer_data.js?v=1"></script>
 <script src="trainer_core.js?v=1"></script>
-<script src="mod_data.js?v=2"></script>
-<script src="mod_core.js?v=1"></script>
+<script src="mod_data.js?v=3"></script>
+<script src="mod_core.js?v=2"></script>
 <script>
 "use strict";
 const SUBSETS = {A:"3C + 22",B:"3A + 22",C:"3C + 3A adjacent",D:"3C + 3C adjacent",E:"3A + 3A adjacent",
@@ -310,7 +312,7 @@ function next(){
     const c = once.cases ? qC[done % qC.length] : cs[Math.floor(Math.random() * cs.length)];
     const li = once.layers ? qL[done % qL.length] : ls[Math.floor(Math.random() * ls.length)];
     const m = CFM.make(c[0], c[1], li, pick[li]);
-    if (m) cur = {l:c[0], n:c[1], li:li, si:pick[li], scr:m.scramble};
+    if (m) cur = {l:c[0], n:c[1], li:li, si:pick[li], scr:m.scramble, angle:m.angle};
   }
   render();
 }
@@ -429,6 +431,10 @@ function render(){
   a.textContent = cur.l + " " + caseName(cur.n); a.style.color = "inherit";
   rc.append("then ", a);
   $("rv-casesub").textContent = SUBSETS[cur.l] + " · column " + (cur.n + 1) + " of 729";
+  const rg = CFM.recog(cur.l, cur.n, cur.li, cur.si, cur.angle);
+  $("rv-pattern").textContent = "Pattern " + rg.pattern + " · recog sticker " + rg.locs.join("/");
+  $("rv-patternsub").textContent = "Permutation pattern and recog sticker position, read in the holding " +
+    (L.sols[cur.si].text ? "the layer was done in." : "of the picture (" + holdingText(L) + ").");
 }
 
 function renderSession(){
