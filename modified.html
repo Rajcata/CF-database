@@ -153,7 +153,6 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="scramble" id="scramble"></div>
     <button class="timer" id="timer" aria-label="Timer. Press space or tap to start and stop.">0.00</button>
     <form class="typed" id="typed" hidden><input id="typedtime" inputmode="decimal" autocomplete="off" aria-label="Type your time and press Enter"></form>
-    <p class="hint" id="hint"></p>
     <div class="actions">
       <button class="gear" id="gear" title="Choose CF cases, layers and layer solutions">&#9881; Settings</button>
       <button id="next">Next scramble</button>
@@ -339,8 +338,6 @@ function renderMode(){
   for (const [val, text] of [[false, "Timer"], [true, "Typing"]])
     box.append(button(text, typedMode === val, () => { if (running || typedMode === val) return; typedMode = val; save(); renderMode(); if (val) $("typedtime").focus(); }));
   $("timer").hidden = typedMode; $("typed").hidden = !typedMode;
-  $("hint").textContent = (typedMode ? "Type your time and press Enter (1234 = 12.34). " : "Space starts and stops the timer (or tap the time). ") +
-    "Scrambles are 11 moves in U L R B, from white on top and green front-left; the layer can show up from any angle.";
 }
 document.addEventListener("keydown", e => {
   if (e.code !== "Space" && e.key !== " ") return;
